@@ -1,0 +1,50 @@
+import math
+from Z_calc import Z_calc
+from Density_calc import Density_calc
+from Visc_calc import Visc_calc
+from Ld_calc import Ld_calc
+from S import S
+
+def Pust(Pzab, Qgas, d, Lk, Ro, L, Tust, Tzab,
+         ZCOR, VCOR, DCOR, LCOR, Ld_tab_value,
+         Pkri, Tkri, m,
+         z_data=None, z_pressures=None,
+         rho_data=None, rho_pressures=None,
+         visc_data=None, visc_pressures=None,
+         ld_data=None, ld_pressures=None):
+    """
+    Расчёт устьевого давления газовой скважины.
+
+    Возвращает:
+    - Pust (float): устьевое давление, МПа
+    """
+    if Pzab == 0 or Qgas == 0:
+        return 0.0
+
+    Pbuf = Pzab * 0.5
+    Tsr = (Tzab + Tust) / 2
+    Psr = (Pzab + Pbuf) / 2
+
+    Zsr = Z_calc(ZCOR, Psr, Tsr, Pkri, Tkri, z_pressures, z_data)
+    Plot = Density_calc(DCOR, Psr, Tsr, Zsr, m, rho_pressures, rho_data)
+    Mu = Visc_calc(VCOR, Psr, Tsr, Zsr, Plot, m, visc_pressures, visc_data)
+
+    Ld = Ld_calc(LCOR, Qgas, d, Mu, Ro, Lk, Ld_tab_value)
+
+    Tsr_K = Tsr + 273.15
+    d_m = d / 1000
+
+    exp_s = math.exp(2 * S(Ro, L, Zsr, Tsr))
+
+    num = 9.9143e3 * Ld * Zsr**2 * Tsr_K**2
+    den = d_m**5 * (exp_s - 1)
+    fi = num / den
+
+    q_m3s = Qgas * 1000 / 86400
+    under_sqrt = (Pzab * 1e6)**2 - fi * q_m3s**2
+
+    if under_sqrt < 0:
+        return 0.0
+
+    Pust_Pa = math.sqrt(under_sqrt) / exp_s
+    return Pust_Pa / 1e6
