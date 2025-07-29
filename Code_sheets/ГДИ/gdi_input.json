@@ -1,0 +1,20 @@
+{
+    "well_tvd": 3197.00,  
+    "d_nkt": 89.00,  
+    "pipe_absolute_roughness": 9.50,  
+    "T_thp_C": 29.00, 
+    "gas_relative_density": 0.61,
+    "hydraulic_resistance_coefficient" :1e-6,  
+    "hydraulic_resistance_method": "cтандартная зависимость",  
+    "well_md": 3197.00,
+    
+    "gdi_data": [
+    {"q_gas": 297.60, "bhp": 17.05, "Pres": 17.60, "thp":12.70766},
+    {"q_gas": 470.40, "bhp": 16.67, "Pres": 17.60, "thp":11.74628},
+    {"q_gas": 597.60, "bhp": 16.31, "Pres": 17.60, "thp":10.69964},
+    {"q_gas": 708.00, "bhp": 16.04, "Pres": 17.60, "thp":9.7363},
+    {"q_gas": 780.00, "bhp": 15.77, "Pres": 17.60, "thp":8.8706},
+    {"q_gas": 693.60, "bhp": 15.95, "Pres": 17.60, "thp":9.7343},
+    {"q_gas": 453.60, "bhp": 16.49, "Pres": 17.60, "thp":11.68748}
+]
+}
