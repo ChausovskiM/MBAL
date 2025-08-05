@@ -1,0 +1,17 @@
+from scipy.interpolate import CubicSpline
+
+def OGR_tab1(P_MPA, pressure_data, ogr_data):
+    """
+    Интерполяция КГФ по альтернативным табличным данным.
+
+    Параметры:
+    - P_MPA (float): давление, МПа
+    - pressure_data (list): давления
+    - ogr_data (list): значения КГФ
+
+    Возвращает:
+    - OGR (float): значение газового фактора
+    """
+    x = max(P_MPA, 0.101325)
+    spline = CubicSpline(pressure_data, ogr_data, extrapolate=True)
+    return float(spline(x))

@@ -1,0 +1,35 @@
+from Visc_JST import Visc_JST
+from Visc_Lee_Gonzalez import Visc_Lee_Gonzalez
+from Visc_tab import Visc_tab
+
+def Visc_calc(Metod, P_MPA, T_C, Z, Plot, m, pressure_data=None, visc_data=None):
+    """
+    Универсальная оболочка расчёта динамической вязкости газа.
+
+    Параметры:
+    - Metod (str): метод расчёта ('Jossi Stiel Thodos', 'Lee-Gonzalez', 'таблица')
+    - P_MPA (float): давление, МПа
+    - T_C (float): температура, °C
+    - Z (float): коэффициент сверхсжимаемости
+    - Plot (float): плотность газа, кг/м³
+    - m (float): относительная молекулярная масса
+    - pressure_data, visc_data: табличные данные (если метод 'таблица')
+
+    Возвращает:
+    - μ (float): динамическая вязкость газа, Па·с
+    """
+    metod = Metod.strip().lower()
+
+    if P_MPA == 0:
+        return 0.0
+
+    if metod == 'jossi stiel thodos':
+        return Visc_JST(P_MPA, T_C, Z) / 1000  # перевод из мкПа·с в Па·с
+    elif metod == 'lee-gonzalez':
+        return Visc_Lee_Gonzalez(T_C, Plot, m) / 1000
+    elif metod == 'таблица':
+        if pressure_data is None or visc_data is None:
+            raise ValueError("Не переданы табличные данные для Visc_tab")
+        return Visc_tab(P_MPA, pressure_data, visc_data) / 1000
+    else:
+        raise ValueError(f"Неизвестный метод расчёта вязкости: '{Metod}'")

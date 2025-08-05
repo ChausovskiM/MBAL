@@ -1,0 +1,53 @@
+from Z_calc import Z_calc
+from Mbal_Hurst import Mbal_Hurst
+from Mbal_P import Mbal_P
+
+
+def Mbal_fP(Pn, Tn, Zn, G, Gp, Cf, Cw, k, m, R, H, Tj, alfa, visc_w, Swi,
+            ZCOR, Pkri, Tkri, Qgas, d_mm, Ro):
+    """
+    Обратный расчёт пластового давления по материальному балансу.
+
+    Параметры:
+    - Pn, Tn, Zn: давление, температура и Z на предыдущем шаге
+    - G, Gp: начальные запасы и накопленная добыча, млн м³
+    - Cf, Cw, Swi: параметры породы и воды
+    - k, m, R, H: проницаемость, пористость, радиус и мощность
+    - Tj: время, сут
+    - alfa: угол охвата ВНВ, градусы
+    - visc_w: вязкость воды
+    - ZCOR: метод корреляции Z
+    - Pkri, Tkri: критические параметры газа
+    - Qgas, d_mm, Ro, m: параметры скважины и газа
+
+    Возвращает:
+    - P (float): пластовое давление, МПа
+    """
+    Cf /= 1000
+    Cw /= 1000
+
+    Pxa = Pn
+    Pxb = 0.1
+
+    for _ in range(6):
+        Zj = Z_calc(ZCOR, Pxa, Tn, Pkri, Tkri)
+        We = Mbal_Hurst(Cw, Cf, Pn, Pxa, k, Tj, m, visc_w,
+                        Qgas, d_mm, H, alfa, Mu=0.001, Ro=Ro)
+        f_a = Mbal_P(Swi, Cf, Cw, Zn, Pn, Tn, We, G, Gp, Zj) - Pxa
+
+        Zj_b = Z_calc(ZCOR, Pxb, Tn, Pkri, Tkri)
+        We_b = Mbal_Hurst(Cw, Cf, Pn, Pxb, k, Tj, m, visc_w,
+                          Qgas, d_mm, H, alfa, Mu=0.001, Ro=Ro)
+        f_b = Mbal_P(Swi, Cf, Cw, Zn, Pn, Tn, We_b, G, Gp, Zj_b) - Pxb
+
+        if (f_a - f_b) == 0:
+            break
+
+        Pxc = Pxa - f_a * (Pxa - Pxb) / (f_a - f_b)
+        if abs(f_a) < 0.01:
+            break
+
+        Pxb = Pxa
+        Pxa = Pxc
+
+    return Pxa

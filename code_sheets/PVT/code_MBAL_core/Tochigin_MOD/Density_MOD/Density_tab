@@ -1,0 +1,19 @@
+def Density_tab(P_MPA, pressure_data, rho_data):
+    """
+    Интерполяция/экстраполяция плотности газа по табличным данным.
+
+    Параметры:
+    - P_MPA (float): давление, МПа
+    - pressure_data (list): давления (МПа)
+    - rho_data (list): плотности (кг/м³)
+
+    Возвращает:
+    - ρ (float): плотность газа, кг/м³
+    """
+    from scipy.interpolate import CubicSpline
+
+    if len(pressure_data) < 2:
+        raise ValueError("Недостаточно данных для интерполяции")
+
+    spline = CubicSpline(pressure_data, rho_data, extrapolate=True)
+    return float(spline(P_MPA))

@@ -1,0 +1,21 @@
+from Z_calc import Z_calc
+
+def Kom_power(Qg, Pin, Tin, Pout, ZCOR, Pkri, Tkri):
+    """
+    Расчёт мощности компрессора.
+
+    Параметры:
+    - Qg (float): расход газа, млн м³/сут
+    - Pin (float): давление на входе, МПа
+    - Tin (float): температура на входе, °C
+    - Pout (float): давление на выходе, МПа
+    - ZCOR (str): метод корреляции Z
+    - Pkri (float): критическое давление газа, МПа
+    - Tkri (float): критическая температура газа, °C
+
+    Возвращает:
+    - Nk (float): мощность компрессора, МВт
+    """
+    Zin = Z_calc(ZCOR, Pin, Tin, Pkri, Tkri)
+    Nk = 2.04 * Zin * (Tin + 273.15) * ((Pout / Pin) - (Pin / Pout)) * Qg / 800
+    return max(Nk, 0.0)

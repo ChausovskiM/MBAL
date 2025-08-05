@@ -1,0 +1,35 @@
+{   "start_dev_date":"2003-12-31",
+    "start_predict_date":"2023-12-31",
+    "Cum_gas_under_pred":879.5,
+    "Z_method":"пенг-робинсон",
+
+    "nbz_gas": 4520,
+    "T_reservor_init": 59.5,
+    "P_reservor_init": 21.076222393167,
+    "sw": 0.37,
+    "porosity": 0.15,
+    "pore_comp": 3,
+    "water_comp": 0.42,
+    "gnt": 13,
+
+    "aquifer_porosity": 0.15,
+    "aquifer_thickness": 10,
+    "aquifer_permeability": 1.7,
+    "aquifer_radius": 500,
+    "drainage_angle": 360,
+    "water_viscosity": 0.5,
+
+    "dev_table": [
+        {"date": "2013-12-31", "P": 21.08, "Cum_Gas": 6.34},
+        {"date": "2014-12-31", "P": 21.08, "Cum_Gas": 99.71},
+        {"date": "2015-12-31", "P": 20.24, "Cum_Gas": 237.40},
+        {"date": "2016-12-31", "P": 19.86, "Cum_Gas": 370.29},
+        {"date": "2017-12-31", "P": 19.25, "Cum_Gas": 462.91},
+        {"date": "2018-12-31", "P": 18.97, "Cum_Gas": 518.07},
+        {"date": "2019-12-31", "P": 18.68, "Cum_Gas": 598.96},
+        {"date": "2020-12-31", "P": 18.36, "Cum_Gas": 707.70},
+        {"date": "2021-12-31", "P": 17.61, "Cum_Gas": 786.76},
+        {"date": "2022-12-31", "P": 17.42, "Cum_Gas": 832.84},
+        {"date": "2023-12-31", "P": 17.20, "Cum_Gas": 879.51}
+    ]
+}
