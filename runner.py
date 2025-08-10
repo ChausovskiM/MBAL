@@ -5,14 +5,14 @@ from pathlib import Path
 
 # Определяем порядок выполнения скриптов
 SCRIPTS_ORDER = [
-    "code_sheets/PVT/pvt_controller_ilya.py",
-    "code_sheets/KGF/kgf_controller_ilya.py",
-    "code_sheets/PZ/pz_controller_ilya.py",
-    "code_sheets/Components/components_controller_ilya.py",
-    "code_sheets/GDI/gdi_controller_ilya.py",
-    "code_sheets/Productivity/prod_controller_ilya.py",
-    "code_sheets/Temperature/temperature_controller_ilya.py",
-    "code_sheets/Base/base_controller_ilya.py",
+    "code_sheets/PVT/pvt_controller.py",
+    "code_sheets/KGF/kgf_controller.py",
+    "code_sheets/PZ/pz_controller.py",
+    "code_sheets/Components/components_controller.py",
+    "code_sheets/GDI/gdi_controller.py",
+    "code_sheets/Productivity/prod_controller.py",
+    "code_sheets/Temperature/temperature_controller.py",
+    "code_sheets/Base/base_controller.py",
 ]
 
 def run_scripts():
