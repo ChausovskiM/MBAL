@@ -290,6 +290,8 @@ def main():
     # Оценка объема добычи СПБТ млн.м3
     df_tabl['SPBT_m_m3'] = (comp1 + comp2 + comp3)/100*df_tabl['Qgas_all']
     #
+    #
+    df_tabl.to_json(r'code_sheets\Base\base_output.json', orient='records', indent=4)
     # === 2 строки × 2 столбца ===
     fig, axs = plt.subplots(2, 2, figsize=(14, 10))
     # --- График добычи ---

@@ -2,8 +2,8 @@ import os
 import sys
 import subprocess
 from pathlib import Path
-import platform
 
+# Определяем порядок выполнения скриптов
 SCRIPTS_ORDER = [
     "code_sheets/PVT/pvt_controller.py",
     "code_sheets/KGF/kgf_controller.py",
@@ -16,37 +16,41 @@ SCRIPTS_ORDER = [
 ]
 
 def run_scripts():
+    # Получаем корневую директорию проекта
     project_root = Path(__file__).parent.absolute()
-    procs = []
-
-    # Для Windows удобнее отвязать дочерние процессы от родителя,
-    # чтобы GUI не закрывался при завершении лаунчера.
-    creationflags = 0
-    if platform.system() == "Windows":
-        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP  # не блокируем консоль
-
+    
     for script_path in SCRIPTS_ORDER:
+        # Формируем полный путь к скрипту
         full_script_path = project_root / script_path
+        
+        # Проверяем существование файла
         if not full_script_path.exists():
             print(f"Error: file {full_script_path} not found!")
             continue
-
-        print(f"Run script: {script_path}")
+        
+        print(f"Runn script: {script_path}")
+        
         try:
-            # Не захватываем stdout/stderr, чтобы не забивать буферы
-            p = subprocess.Popen(
+            # Запускаем скрипт с помощью subprocess
+            result = subprocess.run(
                 [sys.executable, str(full_script_path)],
-                cwd=project_root,
-                creationflags=creationflags,
-                close_fds=False
+                cwd=project_root,  # Устанавливаем рабочую директорию
+                check=True,
+                capture_output=True,
+                text=True
             )
-            procs.append((script_path, p.pid))
-            print(f"  -> started PID {p.pid}")
-        except Exception as e:
-            print(f"Error when starting {script_path}: {e}")
-
-    print("\nAll scripts started. You can switch between their figure windows.")
-    print("PIDs:", procs)
+            
+            # Выводим вывод скрипта
+            if result.stdout:
+                print("Script output:")
+                print(result.stdout)
+                
+        except subprocess.CalledProcessError as e:
+            print(f"Error when executing the script {script_path}:")
+            print(e.stderr)
+            # Можно добавить break если нужно прервать выполнение при ошибке
+            # break
 
 if __name__ == "__main__":
     run_scripts()
+    print("All scripts are executed!")
