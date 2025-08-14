@@ -81,7 +81,7 @@ def main():
     # script_dir = os.path.dirname(os.path.abspath(__file__))
     # file_path = os.path.join(script_dir, "import_properties.json")
     #
-    with open(r"code_sheets\PVT\pvt_input.json", 'r', encoding='utf-8') as f:
+    with open(r"code_sheets/PVT/pvt_input.json", 'r', encoding='utf-8') as f:
         props = json.load(f)
 
     #file_path = os.path.join(script_dir, "gas_components.json")
@@ -205,7 +205,8 @@ def main():
     axs[1, 1].grid(True)
 
     plt.tight_layout()
-    plt.show()
+    #plt.show()
+    fig.savefig('code_sheets/PVT/pvt_graph.png', dpi=300, bbox_inches='tight')
 
 if __name__ == "__main__":
     main()

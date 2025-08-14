@@ -78,7 +78,7 @@ def main():
         "P_ust":round(P_ust2,4),
         }
 
-    with open('code_sheets/Temperature/temperature_outputs.json', 'w', encoding='utf-8') as f:
+    with open('code_sheets/Temperature/temperature_output.json', 'w', encoding='utf-8') as f:
         json.dump(summary, f, ensure_ascii=False, indent=4)                                                               
 if __name__ == "__main__":
     main()

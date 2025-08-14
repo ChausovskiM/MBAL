@@ -257,7 +257,7 @@ def main():
         # добавить Оценка изменения А и В от от времени остановки скважин
         "results_table": df_w_table.to_dict(orient="list") 
     }
-    with open('code_sheets/Productivity/productivity_outputs.json', 'w', encoding='utf-8') as f:
+    with open('code_sheets/Productivity/productivity_output.json', 'w', encoding='utf-8') as f:
         json.dump(summary, f, ensure_ascii=False, indent=4)
     #print(df_w_table[['A_pseudo','B_pseudo','Qgas_pseudo','drill_ranking']])
     #print(df_w_table['lmbd(Psr)'].values[0])

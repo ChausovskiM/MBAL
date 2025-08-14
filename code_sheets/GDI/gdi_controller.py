@@ -122,9 +122,6 @@ def main():
     ax3.grid(True)
 
     # Настройка общего заголовка и отступов
-    plt.tight_layout()
-
-    # Отображение графиков
-    plt.show()
+    fig.savefig('code_sheets/GDI/gdi_graph.png', dpi=300, bbox_inches='tight')
 if __name__ == "__main__":
     main()

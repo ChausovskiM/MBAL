@@ -82,7 +82,7 @@ def main():
         base_input = json.load(f)
     df_tabl = pd.DataFrame(base_input["table_data"])
     # Оутпуты листа Продуктивность
-    with open(r"code_sheets\Productivity\productivity_outputs.json", 'r', encoding='utf-8') as f:
+    with open(r"code_sheets\Productivity\productivity_output.json", 'r', encoding='utf-8') as f:
         product_outputs_df = pd.DataFrame(json.load(f)["results_table"])
     #
     # определяем 1) Давление начала конденсации 2) Начальный КГФ
@@ -102,7 +102,7 @@ def main():
             Pnk, kgf = kgf_type_input['Pnk'], kgf_type_input['KGF'] 
     #
     # дополняем таблицу месяцами - 6 лет по месяцам - 72 месяца
-    for i in range(14,73):
+    for i in range(14,1201):
         df_tabl.loc[i-1,["month","exploration_coeff","dP"]] = [i,base_input["default_exploration_coeff"],2.6] #заполнение оставшихся месяцев
     #
     year_start = datetime(year = datetime.strptime(start_predcit_date, "%Y-%m-%d").year, month=12, day=1)
@@ -336,6 +336,7 @@ def main():
     axs[1, 0].set_title("График давлений")
     axs[1, 0].set_ylabel("Давление, МПА")
     axs[1, 0].set_xlabel("Дата")
+    axs[1, 0].set_ylim(-20, pz_input['P_reservor_init']*1.05)
     axs[1, 0].legend()
     axs[1, 0].grid(True)
     #
@@ -346,10 +347,12 @@ def main():
     axs[1, 1].set_xlabel("Дата")
     axs[1, 1].legend()
     axs[1, 1].grid(True)
+    
     #
     axs[1, 1].xaxis.set_major_locator(ticker.MultipleLocator(12))
     plt.tight_layout()
-    plt.show()
+    #plt.show()
+    fig.savefig('code_sheets/Base/base_graph.png', dpi=300, bbox_inches='tight')
     #
     # df_tabl['OIZ_gas_actual'] = oiz_gas - df_tabl['Qgas_all']
     print(df_tabl[['Ppl_on_start_period','Ppl_on_end_period']])

@@ -80,8 +80,8 @@ def main():
         axs[row, col].legend()
         axs[row, col].grid(True)
 
-    # Настройка отображения
-    plt.tight_layout()
-    plt.show()
+    fig.savefig('code_sheets/Components/components_graph.png', dpi=300, bbox_inches='tight')
+
+
 if __name__ == "__main__":
     main()

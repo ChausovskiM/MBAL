@@ -131,9 +131,11 @@ def main():
     ax2.grid(True)
 
     # Настройка общего заголовка и отступов
-    plt.tight_layout()
+    fig.tight_layout()
 
     # Отображение графиков
-    plt.show()
+    #plt.show()
+    fig.savefig('code_sheets/PZ/pz_graph.png', dpi=300, bbox_inches='tight')
+
 if __name__ == "__main__":
     main()
