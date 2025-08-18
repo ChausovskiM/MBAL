@@ -1,90 +1,129 @@
 import os
-from PIL import Image
 import sys
-import subprocess
+import shutil
 from pathlib import Path
+import importlib
+from PIL import Image
 import matplotlib.pyplot as plt
 
+# --- режимы и базовые пути ---
+FROZEN = getattr(sys, "frozen", False)
+BASE_READ = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.resolve()))  # где лежат ресурсы
+APP_DIR  = Path(sys.executable).parent if FROZEN else Path(__file__).parent.resolve()
 
-# Добавляем корень проекта в пути Python
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.append(project_root)
-# Определяем порядок выполнения скриптов
-SCRIPTS_ORDER = [
-    "code_sheets/PVT/pvt_controller_ilya.py",
-    "code_sheets/KGF/kgf_controller_ilya.py",
-    "code_sheets/PZ/pz_controller_ilya.py",
-    "code_sheets/Components/components_controller_ilya.py",
-    "code_sheets/GDI/gdi_controller_ilya.py",
-    "code_sheets/Productivity/prod_controller_ilya.py",
-    "code_sheets/Temperature/temperature_controller_ilya.py",
-    "code_sheets/Base/base_controller_ilya.py",
+# В .exe пишем в отдельную папку, исходники не трогаем
+OUT_DIR  = (APP_DIR / "run_data") if FROZEN else APP_DIR
+
+# чтобы модули импортировались из пакета
+if str(BASE_READ) not in sys.path:
+    sys.path.insert(0, str(BASE_READ))
+
+MODULES = [
+    "code_sheets.PVT.pvt_controller",
+    "code_sheets.KGF.kgf_controller",
+    "code_sheets.PZ.pz_controller",
+    "code_sheets.Components.components_controller",
+    "code_sheets.GDI.gdi_controller",
+    "code_sheets.Productivity.prod_controller",
+    "code_sheets.Temperature.temperature_controller",
+    "code_sheets.Base.base_controller",
 ]
 
-Graph_order = {'code_sheets/PVT/pvt_graph.png':'PVT',
-               'code_sheets/KGF/kgf_graph.png':'КГФ',
-               'code_sheets/PZ/pz_graph.png':'Pz',
-               'code_sheets/Components/components_graph.png':'Состав',
-               'code_sheets/GDI/gdi_graph.png':'Обработка ГДИ',
-               'code_sheets/Base/base_graph.png':'База'
+GRAPH_FILES = {
+    "code_sheets/PVT/pvt_graph.png": "PVT",
+    "code_sheets/KGF/kgf_graph.png": "КГФ",
+    "code_sheets/PZ/pz_graph.png": "Pz",
+    "code_sheets/Components/components_graph.png": "Состав",
+    "code_sheets/GDI/gdi_graph.png": "Обработка ГДИ",
+    "code_sheets/Base/base_graph.png": "База",
 }
 
-def run_scripts():
-    # Получаем корневую директорию проекта
-    project_root = Path(__file__).parent.absolute()
+# копируем только данные (не .py), и только в .exe
+DATA_EXT = {".json", ".csv", ".xlsx", ".xls", ".parquet", ".txt", ".png", ".jpg", ".jpeg"}
+
+def prepare_workdir():
+    (OUT_DIR / "code_sheets").mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / "plots").mkdir(exist_ok=True)
+    (OUT_DIR / "outputs").mkdir(exist_ok=True)
+    os.environ["MBAL_OUT_DIR"] = str(OUT_DIR)
+
+    if not FROZEN:
+        # из исходников ничего не копируем, чтобы не трогать проект
+        return
+
+    src = BASE_READ / "code_sheets"
+    dst = OUT_DIR   / "code_sheets"
+
+    if not src.exists():
+        print("[warn] В пакете нет папки 'code_sheets'")
+        return
+
+    for p in src.rglob("*"):
+        rel = p.relative_to(src)
+        target = dst / rel
+        if p.is_dir():
+            target.mkdir(exist_ok=True, parents=True)
+        else:
+            # копируем только данные, .py не трогаем
+            if p.suffix.lower() in DATA_EXT:
+                target.parent.mkdir(exist_ok=True, parents=True)
+                shutil.copy2(p, target)
+
+def run_controllers():
+    old_cwd = Path.cwd()
+    try:
+        os.chdir(OUT_DIR)  # все относительные записи пойдут в run_data
+        for name in MODULES:
+            try:
+                print(f"Running: {name}")
+                mod = importlib.import_module(name)
+                if hasattr(mod, "main"):
+                    mod.main()
+                else:
+                    print(f"[skip] {name} не содержит main()")
+            except Exception as e:
+                print(f"[ERR] {name}: {e}")
+    finally:
+        os.chdir(old_cwd)
+
+def show_graphs():
+    shown = False
+    for rel, title in GRAPH_FILES.items():
+        path = OUT_DIR / rel
+        if path.exists():
+            try:
+                img = Image.open(path)
+                fig = plt.figure(num=title)
+                plt.imshow(img)
+                plt.axis("off")
+                plt.title(title)
+                plt.tight_layout()
+                plt.show(block=False)
+                shown = True
+            except Exception as e:
+                print(f"[img err] {path}: {e}")
+        else:
+            print(f"[miss] {path}")
+    if shown:
+        plt.show(block=True)
+
+def main():
+    print(f"[info] BASE_READ = {BASE_READ}")
+    print(f"[info] OUT_DIR   = {OUT_DIR}")
+    prepare_workdir()
+    run_controllers()
     
-    for script_path in SCRIPTS_ORDER:
-        # Формируем полный путь к скрипту
-        full_script_path = project_root / script_path
-        
-        # Проверяем существование файла
-        if not full_script_path.exists():
-            print(f"Error: file {full_script_path} not found!")
-            continue
-        
-        print(f"Runn script: {script_path}")
-        
-        try:
-            # Запускаем скрипт с помощью subprocess
-            result = subprocess.run(
-                [sys.executable, str(full_script_path)],
-                cwd=project_root,  # Устанавливаем рабочую директорию
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            
-            # Выводим вывод скрипта
-            if result.stdout:
-                print("Script output:")
-                print(result.stdout)
-                
-        except subprocess.CalledProcessError as e:
-            print(f"Error when executing the script {script_path}:")
-            print(e.stderr)
-            # Можно добавить break если нужно прервать выполнение при ошибке
-            # break
+    show_graphs()
+    print("Все скрипты выполнены!")
 
 if __name__ == "__main__":
-    run_scripts()
-
-    figures = []
-    for image_path, title in Graph_order.items():
-        try:
-            img = Image.open(image_path)
-            # Создаем новое окно для каждого графика
-            fig = plt.figure(num=title)  # Уникальный заголовок для каждого окна
-            plt.imshow(img)
-            plt.axis('off')
-            plt.title(title)
-            plt.tight_layout()
-
-            # Показываем окно без блокировки
-            plt.show(block=False)
-            figures.append(fig)  # Сохраняем ссылку на окно
-
-        except Exception as e:
-            print(f"Ошибка при открытии {image_path}: {str(e)}")
-    # Показываем все окна одновременно
-    plt.show(block=True)  # block=True держит окна открытыми
-    print("All scripts are executed!")
+    # подтягиваем либы, чтобы PyInstaller их включил
+    try:
+        import openpyxl
+        import pandas  # noqa: F401
+        import matplotlib  # noqa: F401
+        import scipy  # noqa: F401
+        import tkinter  # для окон Matplotlib (TkAgg)
+    except Exception:
+        pass
+    main()

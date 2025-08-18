@@ -1,0 +1,13 @@
+{
+  "Ppr": 4.2068,
+  "Tpr": 1.6566,
+  "gas_relative_density": 0.6186,
+  "Z_calc": 0.85327,
+  "Z_deviation": -5.61,
+  "rho": 159.261,
+  "rho_std": 0.745,
+  "mu": 0.02055,
+  "mu_std": 0.011,
+  "mu_deviation": -14.37,
+  "Bg": 0.00468
+}

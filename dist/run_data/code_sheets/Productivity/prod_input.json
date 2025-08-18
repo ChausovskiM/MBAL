@@ -1,0 +1,38 @@
+{
+  "ofp_gas":0.9,
+  "kgf_method": "typical dependence",
+  "a_per_stop" : 0,
+  "b_per_stop":0,
+  "k":0,
+  "phie":0,
+  "ct":0, 
+  "rc":0,
+  "Pres":0,
+  "bhp":0,
+  "Lgs":null,
+  "pi_method":"двухпараметрическая",
+  "well_table":[
+    {
+        "well": 854,
+        "Kust": 5,
+        "Dzab": 114.00,
+        "S": 1.00,
+        "k_xy": 5.31,
+        "k_xy_frac": null,
+        "k_z": 0.531,
+        "h_xy": 140,
+        "h_z": null,
+        "Nfrac": null,
+        "L/2": null,
+        "k_frac": null,
+        "teta": null,
+        "w_frac": null,
+        "poro_frac": 0.149,
+        "Area": 1.9890543834,
+        "heff": 6.8,
+        "NTG": 0.675,
+        "Pres": 17.2,
+        "Pzab": 15.5303500297553
+    }
+  ]  
+}
