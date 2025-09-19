@@ -1,4 +1,6 @@
 MBAL Gas-Condensate Project
+Документация = методичка сгенерированная нейронкой
+исходный промысловый ексель прикреплен
 
 Проект для расчёта разработки газоконденсатного месторождения.
 Перенос логики Excel/VBA-модели (листы PVT, KGF, PZ, Productivity, GDI, Temperature, Base, Components) в Python.
