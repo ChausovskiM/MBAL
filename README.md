@@ -46,7 +46,7 @@ python runner.py
 
 Результаты
 
-JSON-файлы (*_output.json) с расчётными таблицами
+JSON-файлы (*_output.json) с расчётными таблицами (для совместимости PZ также пишет legacy `pz_outputs.json`)
 
 PNG-графики (*_graph.png) для наглядности
 

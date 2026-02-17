@@ -1,42 +1,20 @@
-import openpyxl
-import os
 import json
-import math
-import sys
-#
+from pathlib import Path
 from datetime import datetime
-import numpy as np
-import pandas as pd
-from scipy.optimize import curve_fit
-import matplotlib.pyplot as plt
-#
 
-# Добавляем корень проекта в пути Python
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.append(project_root)
-#print(sys.path)
-#
-#
+import pandas as pd
+import matplotlib.pyplot as plt
+
 from code_MBAL.Z_MOD.Z_calc import Z_calc
 from code_MBAL.MBAL_fP_MOD.MBAL_fP import MBAL_fP
 from code_MBAL.MBAL_fP_MOD.MBAL_Hurst import Mbal_Hurst
+
+BASE_DIR = Path(__file__).resolve().parents[2]
 #from code_MBAL.MBAL_fP_MOD.MBAL_fP import Z_calc
-
-def calc_mixture_params(gas_components):
-    """
-    Вычисляет средние параметры смеси: молекулярный вес, критическую температуру и давление.
-
-    Ожидается, что mol_fraction_pct передаётся в процентах (%).
-    """
-    Mw_mix = sum(comp["mol_fraction_pct"] / 100 * comp["Mw"] for comp in gas_components)
-    Tc_mix = sum(comp["mol_fraction_pct"] / 100 * comp["Tc"] for comp in gas_components)
-    Pc_mix = sum(comp["mol_fraction_pct"] / 100 * comp["Pc"] for comp in gas_components)
-
-    return Mw_mix, Tc_mix, Pc_mix
 
 def main():
 # загрузка исходных данных
-    with open(r"code_sheets\PZ\pz_input.json", 'r', encoding='utf-8') as f:
+    with (BASE_DIR / "code_sheets" / "PZ" / "pz_input.json").open("r", encoding="utf-8") as f:
         pz_input = json.load(f)
 
     oiz_gas = pz_input['nbz_gas'] - pz_input['Cum_gas_under_pred']
@@ -106,8 +84,11 @@ def main():
         "results_table": df_dev.to_dict(orient="list") 
     }
 
-    with open('code_sheets/PZ/pz_outputs.json', 'w', encoding='utf-8') as f:
-        json.dump(summary, f, ensure_ascii=False, indent=4)
+    legacy_output = BASE_DIR / "code_sheets" / "PZ" / "pz_outputs.json"
+    output_path = BASE_DIR / "code_sheets" / "PZ" / "pz_output.json"
+    for path in (legacy_output, output_path):
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=4)
     #print(df_dev)
     # Создаем фигуру с двумя подграфиками
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))

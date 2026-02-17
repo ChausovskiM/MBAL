@@ -1,17 +1,8 @@
-import openpyxl
-import os
 import json
-import math
-import sys
-#
-import numpy as np
-import pandas as pd
-import datetime
-import matplotlib.pyplot as plt
-#
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.append(project_root)
+from pathlib import Path
 
+import pandas as pd
+import matplotlib.pyplot as plt
 from code_MBAL.Z_MOD.Z_calc import Z_calc
 from code_MBAL.Z_MOD.Z_PR import Z_PR
 from code_MBAL.Z_MOD.Z_GUR import Z_GUR
@@ -20,60 +11,10 @@ from code_MBAL.Density_MOD.Density_calc import Density_calc
 from code_MBAL.Visc_MOD.Visc_calc import Visc_calc
 from code_MBAL.Visc_MOD.Visc_Lee_Gonzalez import Visc_Lee_Gonzalez
 from code_MBAL.Visc_MOD.Visc_JST import Visc_JST
-# print(os.getcwd())
-# === Загрузка данных ===
-# def load_input(path):r
-#     with open(path, "r", encoding="utf-8") as f:
-#         return json.load(f)
+from code_MBAL.common.gas_mixture import calc_mixture_params, load_gas_components, prepare_inputs_from_components
 
-# def load_components(path):
-#     with open(path, "r", encoding="utf-8") as f:
-#         return json.load(f)
+BASE_DIR = Path(__file__).resolve().parents[2]
 
-# === Главный расчётный блок ===
-def calc_mixture_params(gas_components):
-    """
-    Вычисляет средние параметры смеси: молекулярный вес, критическую температуру и давление.
-
-    Ожидается, что mol_fraction_pct передаётся в процентах (%).
-    """
-    Mw_mix = sum(comp["mol_fraction_pct"] / 100 * comp["Mw"] for comp in gas_components)
-    Tc_mix = sum(comp["mol_fraction_pct"] / 100 * comp["Tc"] for comp in gas_components)
-    Pc_mix = sum(comp["mol_fraction_pct"] / 100 * comp["Pc"] for comp in gas_components)
-
-    return Mw_mix, Tc_mix, Pc_mix
-
-def prepare_inputs_from_components(gas_components):
-    """
-    Преобразует список компонентов газа в набор входных параметров
-    для функции Z_PR: XiRange, Pc, Tc, Vc, w
-
-    Параметры:
-    - gas_components (list[dict]): список словарей с параметрами компонентов
-
-    Возвращает:
-    - XiRange, Pc, Tc, Vc, w (все списки float)
-    """
-    gas_components = pd.DataFrame(gas_components)
-
-    XiRange = gas_components['mol_fraction_pct']
-    MwRange = gas_components['Mw']
-    TcRange = gas_components['Tc']
-    PcRange = gas_components['Pc']
-    VcRange = gas_components['Vc']
-    ZcRange = gas_components['Zc']
-    wRange = gas_components['w']
-
-    # XiRange = gas_components['mol_fraction_pct']
-    # Pc = gas_components['Pc']  # МПа
-    # Tc = gas_components['Tc']  #К  
-    # Vc = gas_components['Vc']  # см3/моль  
-    # w  = gas_components['w']   #безразмерный 
-
-    return XiRange,MwRange,TcRange,PcRange,VcRange,ZcRange,wRange # Pc, Tc, Vc, w
-
-
-#os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # === Расчёт значений для таблицы (строки 4,5,6,8,10,12,13,15,17,18,19) ===
 def main():
     
@@ -81,13 +22,10 @@ def main():
     # script_dir = os.path.dirname(os.path.abspath(__file__))
     # file_path = os.path.join(script_dir, "import_properties.json")
     #
-    with open(r"code_sheets/PVT/pvt_input.json", 'r', encoding='utf-8') as f:
+    with (BASE_DIR / "code_sheets" / "PVT" / "pvt_input.json").open("r", encoding="utf-8") as f:
         props = json.load(f)
 
-    #file_path = os.path.join(script_dir, "gas_components.json")
-    #
-    with open(r"code_sheets\PVT\gas_components.json", 'r', encoding='utf-8') as f:
-        gas_components = json.load(f)
+    gas_components = load_gas_components(BASE_DIR / "code_sheets" / "PVT" / "gas_components.json")
     # props = load_input("input_properties.json")
     # gas_components = pd.DataFrame(load_components("gas_components.json"))
     
