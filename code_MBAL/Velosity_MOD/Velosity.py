@@ -16,6 +16,9 @@ def Velosity(ZCOR, Tpl, Qgas, Pzab, d_mm):
     Возвращает:
     - V (float): линейная скорость газа, м/с
     """
+    if Qgas <= 0 or Pzab <= 0 or d_mm <= 0:
+        return 0.0
+
     Zpl = Z_calc(ZCOR, Pzab, Tpl)
     T_K = Tpl + 273.15
     d_cm = d_mm / 10

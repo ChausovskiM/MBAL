@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from code_MBAL.Complementary_functions.save_figure import save_figure
 
 from code_MBAL.Z_MOD.Z_calc import Z_calc
 from code_MBAL.MBAL_fP_MOD.MBAL_fP import MBAL_fP
@@ -116,7 +117,8 @@ def main():
 
     # Отображение графиков
     #plt.show()
-    fig.savefig('code_sheets/PZ/pz_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(fig, 'code_sheets/PZ/pz_graph.png', dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
 if __name__ == "__main__":
     main()

@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
+from code_MBAL.Complementary_functions.save_figure import save_figure
 #
 
 # Добавляем корень проекта в пути Python
@@ -116,7 +117,8 @@ def main():
     ax3.legend()
     ax3.grid()
 
-    fig.savefig('code_sheets/KGF/kgf_graph.png', dpi=300)
+    save_figure(fig, 'code_sheets/KGF/kgf_graph.png', dpi=300)
+    plt.close(fig)
 
 
 if __name__ == "__main__":

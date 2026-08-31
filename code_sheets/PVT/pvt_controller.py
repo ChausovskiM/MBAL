@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from code_MBAL.Complementary_functions.save_figure import save_figure
 from code_MBAL.Z_MOD.Z_calc import Z_calc
 from code_MBAL.Z_MOD.Z_PR import Z_PR
 from code_MBAL.Z_MOD.Z_GUR import Z_GUR
@@ -144,7 +145,8 @@ def main():
 
     plt.tight_layout()
     #plt.show()
-    fig.savefig('code_sheets/PVT/pvt_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(fig, 'code_sheets/PVT/pvt_graph.png', dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
 if __name__ == "__main__":
     main()

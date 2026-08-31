@@ -23,10 +23,9 @@ def Visc_calc(Metod, P_MPA, T_C, Z, density, pressure_data=None, visc_data=None)
     Возвращает:
     - μ (float): динамическая вязкость газа, Па·с
     """
-    # открываем компоненты с листа PVT
     gas_components = load_gas_components()
     XiRange, MwRange, TcRange, PcRange, VcRange, ZcRange,wRange = prepare_inputs_from_components(gas_components)
-    Mw_mix, Tc_mix, Pc_mix = calc_mixture_params(gas_components)
+    Mw_mix, _, _ = calc_mixture_params(gas_components)
 
     metod = Metod.strip().lower()
 

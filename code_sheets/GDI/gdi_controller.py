@@ -18,6 +18,7 @@ from code_MBAL.Visc_MOD.Visc_calc import Visc_calc
 from code_MBAL.Ld_MOD.Ld import Ld
 from code_MBAL.Pust_MOD.Pust import Pust
 from code_MBAL.Pust_MOD.Ld_MOD.Ld_calc import Ld_calc
+from code_MBAL.Complementary_functions.save_figure import save_figure
 
 
 
@@ -25,8 +26,10 @@ def main():
     # открываем инпуты от листа PVT
     with open(r"code_sheets\PVT\pvt_input.json", 'r', encoding='utf-8') as f:
         pvt_props = json.load(f)
+    with open(r"code_sheets\PZ\pz_input.json", 'r', encoding='utf-8') as f:
+        pz_input = json.load(f)
     #
-    Z_method = 'пенг-робинсон'
+    Z_method = pz_input["Z_method"]
     density_method = pvt_props["density_method"]
     viscosity_method = pvt_props["viscosity_method"]
     T_C_plast = pvt_props["T_plast_C"]
@@ -59,7 +62,7 @@ def main():
     # промежуточные столбцы для расчета последного столбца "Коэффициент гидравлического сопротивления"
     df_gdi_data['Zsr'] = df_gdi_data['bhp'].apply(lambda p: Z_calc(Z_method, p, (gdi_input['T_thp_C'] + T_C_plast)/2))
     df_gdi_data['density'] = df_gdi_data.apply(lambda row: Density_calc(density_method, row['bhp'], (gdi_input['T_thp_C'] + T_C_plast)/2, row['Zsr']),axis =1)
-    df_gdi_data['visc'] = df_gdi_data.apply(lambda row: Visc_calc(viscosity_method, row['bhp'], (gdi_input['T_thp_C'] + T_C_plast)/2, row['Zsr'], ['density']),axis =1)
+    df_gdi_data['visc'] = df_gdi_data.apply(lambda row: Visc_calc(viscosity_method, row['bhp'], (gdi_input['T_thp_C'] + T_C_plast)/2, row['Zsr'], row['density']),axis =1)
     # столбец "Коэффициент гидравлического сопротивления"
     df_gdi_data['coef_hidr_resistance'] = df_gdi_data.apply(lambda row: Ld_calc(gdi_input['hydraulic_resistance_method'], 
                                                                                 row['q_gas'], 
@@ -68,7 +71,6 @@ def main():
                                                                                 row['density'], 
                                                                                 gdi_input['pipe_absolute_roughness'], 
                                                                                 gdi_input['hydraulic_resistance_coefficient']),axis =1)
-    print(df_gdi_data[['lmbda','thp','thp_calc','coef_hidr_resistance']])
     #выгрузка результатов
     df_gdi_data.to_json('code_sheets/GDI/gdi_output.json', orient='records', lines=True)
      # Создаем фигуру с двумя подграфиками
@@ -118,10 +120,10 @@ def main():
     ax3.set_ylabel('Устьевое давление (расчет), МПа')
     ax3.set_ylim(bottom=0, top=df_gdi_data['thp_calc'].max() * 1.2)  # Ось Y начинается с 0
     ax3.set_xlim(0, None)
-    ax3.legend()
     ax3.grid(True)
 
     # Настройка общего заголовка и отступов
-    fig.savefig('code_sheets/GDI/gdi_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(fig, 'code_sheets/GDI/gdi_graph.png', dpi=300, bbox_inches='tight')
+    plt.close(fig)
 if __name__ == "__main__":
     main()

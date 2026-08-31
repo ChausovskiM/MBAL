@@ -2,7 +2,7 @@
     {
         "name": "Азот",
         "formula": "N2",
-        "mol_fraction_pct": 0.499,
+        "mol_fraction_pct": 0.499009980199604,
         "Mw": 28.013,
         "Tc": 126.2,
         "Pc": 3.394,
@@ -16,7 +16,7 @@
     {
         "name": "Диоксид углерода",
         "formula": "CO2",
-        "mol_fraction_pct": 0.411,
+        "mol_fraction_pct": 0.411008220164403,
         "Mw": 44.01,
         "Tc": 304.7,
         "Pc": 7.387,
@@ -86,7 +86,7 @@
     {
         "name": "Метан",
         "formula": "CH4",
-        "mol_fraction_pct": 92.714,
+        "mol_fraction_pct": 92.7138542770856,
         "Mw": 16.043,
         "Tc": 190.6,
         "Pc": 4.604,
@@ -100,7 +100,7 @@
     {
         "name": "Этан",
         "formula": "C2H6",
-        "mol_fraction_pct": 3.823,
+        "mol_fraction_pct": 3.82307646152923,
         "Mw": 30.07,
         "Tc": 305.43,
         "Pc": 4.884,
@@ -114,7 +114,7 @@
     {
         "name": "Пропан",
         "formula": "C3H8",
-        "mol_fraction_pct": 0.613,
+        "mol_fraction_pct": 0.613012260245205,
         "Mw": 44.097,
         "Tc": 369.8,
         "Pc": 4.246,
@@ -128,7 +128,7 @@
     {
         "name": "Изобутан",
         "formula": "i-C4H10",
-        "mol_fraction_pct": 0.322,
+        "mol_fraction_pct": 0.322006440128803,
         "Mw": 58.124,
         "Tc": 408.1,
         "Pc": 3.648,
@@ -142,7 +142,7 @@
     {
         "name": "н-бутан",
         "formula": "n-C4H10",
-        "mol_fraction_pct": 0.160,
+        "mol_fraction_pct": 0.160003200064001,
         "Mw": 58.124,
         "Tc": 425.2,
         "Pc": 3.797,
@@ -156,7 +156,7 @@
     {
         "name": "C5+",
         "formula": "C5+",
-        "mol_fraction_pct": 1.458,
+        "mol_fraction_pct": 1.45802916058321,
         "Mw": 70.00,
         "Tc": 430.00,
         "Pc": 30.000,

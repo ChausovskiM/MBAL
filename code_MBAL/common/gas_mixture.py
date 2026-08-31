@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
@@ -10,6 +11,7 @@ import pandas as pd
 PVT_COMPONENTS_PATH = Path("code_sheets") / "PVT" / "gas_components.json"
 
 
+@lru_cache(maxsize=None)
 def load_gas_components(path: str | Path = PVT_COMPONENTS_PATH) -> list[dict]:
     """Load gas components from JSON file."""
     with Path(path).open("r", encoding="utf-8") as f:

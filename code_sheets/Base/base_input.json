@@ -14,6 +14,13 @@
     "composition_method":"на основе кгф",
     "kgf_method": "experimental data",
     "qgas_method":"типовая зависимость",
+    "default_dP_mpa": 2.6,
+    "enforce_operating_limits": true,
+    "restart_stopped_wells": false,
+    "max_depression_mpa": 10.0,
+    "min_bottomhole_velocity_ms": 1.5,
+    "max_wellhead_velocity_ms": 26.0,
+    "min_wellhead_pressure_mpa": 5.0,
 
     "table_data": [
                 {

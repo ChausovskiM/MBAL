@@ -29,6 +29,11 @@ def number(q, data_range):
     return i + 1
 
 
+def effective_length(h_xy, h_z, ntg):
+    """Длина вскрытия с поправкой NTG для наклонной/горизонтальной части."""
+    return math.hypot(h_xy, h_z) * (1 if h_z == 0 else ntg)
+
+
 def main():
     # Открываем инпуты от текущего листа Продуктивность
     with open(r"code_sheets\Productivity\prod_input.json", 'r', encoding='utf-8') as f:
@@ -52,8 +57,12 @@ def main():
     Z_method = pz_input["Z_method"]
     #
     # расчет таблицы
-    df_w_table = df_w_table.replace(np.nan,0) #для расчетов
-    df_w_table['Leff'] =df_w_table.apply(lambda row: ((row['h_xy']**2 +row['h_z']**2)**0.5)*{0:1,row['NTG']:row['h_z']}[row['h_z']],axis=1) 
+    with pd.option_context('future.no_silent_downcasting', True):
+        df_w_table = df_w_table.fillna(0)
+    df_w_table = df_w_table.infer_objects(copy=False)  # для расчётов
+    df_w_table['Leff'] = df_w_table.apply(
+        lambda row: effective_length(row['h_xy'], row['h_z'], row['NTG']), axis=1
+    )
     df_w_table['Rkg'] =df_w_table.apply(lambda row: (row["Area"]*1e6/math.pi)**0.5,axis=1) #странная формула ексель!
     df_w_table['a_joshi'] = (df_w_table["Leff"]/2)*(0.5 + (0.25 + (2*df_w_table['Rkg']/df_w_table['Leff'])**4)**0.5)**0.5
     df_w_table['rw_joshi'] = (df_w_table['Rkg']*df_w_table['Leff']/2)/(df_w_table['a_joshi']*(1 + 

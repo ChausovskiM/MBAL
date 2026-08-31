@@ -17,6 +17,7 @@ sys.path.append(project_root)
 #
 #
 from code_MBAL.Complementary_functions.Composition_MOD.Composition import Composition
+from code_MBAL.Complementary_functions.save_figure import save_figure
 
 # Функция-обертка для применения к строкам
 
@@ -80,7 +81,8 @@ def main():
         axs[row, col].legend()
         axs[row, col].grid(True)
 
-    fig.savefig('code_sheets/Components/components_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(fig, 'code_sheets/Components/components_graph.png', dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
 
 if __name__ == "__main__":

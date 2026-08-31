@@ -21,6 +21,8 @@ def Tochigin(Pz, Tpl, sigma, Ro_lic, d_mm, ZCOR, DCOR,  m):
     Возвращает:
     - Vc (float): критическая скорость газа, м/с
     """
+    if Pz <= 0 or d_mm <= 0:
+        return 0.0
     if Ro_lic == 0:
         Ro_lic = 1000
 

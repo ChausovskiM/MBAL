@@ -14,23 +14,19 @@ def fQLd(a: float, b: float, ld: float, ppl: float, pzab: float) -> float:
     Возвращает:
     float: Дебит газа
     """
-    if a == 0:
+    pressure_drop = (ppl - pzab) * ld
+    if a == 0 or pressure_drop <= 0:
         return 0.0
-    else:
-        a1 = b
-        b1 = a
-        c1 = -((ppl) - (pzab)) * ld
-        discriminant = (b1) ** 2 - 4 * a1 * c1
 
-        # Проверяем дискриминант
-        if discriminant < 0:
-            return 0.0
+    if b == 0:
+        return max(pressure_drop / a, 0.0)
 
-        # Дебит газа
-        q = (-b1 + math.sqrt(discriminant)) / (2 * a1)
+    a1 = b
+    b1 = a
+    c1 = -pressure_drop
+    discriminant = b1**2 - 4 * a1 * c1
 
-        # Дебит только положительный
-        if q < 0:
-            q = 0.0
+    if discriminant < 0:
+        return 0.0
 
-        return q
+    return max((-b1 + math.sqrt(discriminant)) / (2 * a1), 0.0)

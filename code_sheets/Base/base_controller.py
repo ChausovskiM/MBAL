@@ -28,6 +28,109 @@ from code_MBAL.Z_MOD.Z_calc import Z_calc
 from code_MBAL.Complementary_functions.OGR_calc import OGR_calc
 from code_MBAL.Velosity_MOD.Velosity import Velosity
 from code_MBAL.Complementary_functions.Composition_MOD.Composition_calc import Composition_calc
+from code_MBAL.Complementary_functions.save_figure import save_figure
+
+
+GAS_CONTRIBUTION_COLUMNS = [
+    'Qgas_vns', 'Qgas_frac', 'Qgas_pvlg', 'Qgas_zbs', 'Qgas_rs',
+    'Qgas_vbd', 'Qgas_gtm', 'Qgas_periodic',
+]
+COND_CONTRIBUTION_COLUMNS = [
+    'Qcond_vns', 'Qcond_frac', 'Qcond_pvlg', 'Qcond_zbs', 'Qcond_rs',
+    'Qcond_vbd', 'Qcond_gtm', 'Qcond_periodic',
+]
+
+
+def condensate_tonnes_to_m3(tonnes_per_day, density_kgm3):
+    """Переводит массовый дебит конденсата, т/сут, в объёмный, м³/сут."""
+    if density_kgm3 <= 0:
+        raise ValueError("Плотность конденсата должна быть больше нуля")
+    return tonnes_per_day * 1000 / density_kgm3
+
+
+def _ensure_contribution_columns(df_tabl, columns):
+    """Сохраняет переданные добычи ГТМ; отсутствующие значения считает нулевыми."""
+    for column in columns:
+        if column not in df_tabl:
+            df_tabl[column] = 0.0
+        else:
+            df_tabl[column] = pd.to_numeric(df_tabl[column], errors='coerce').fillna(0.0)
+
+
+def _operating_limit_reason(qgas, pzab, pvt_input, pvt_output, pz_input, base_input):
+    """Возвращает причину остановки скважины или пустую строку."""
+    pust = Pust(
+        pzab, qgas, base_input['d_nkt'], base_input['pipe_absolute_roughness'],
+        pvt_output['gas_relative_density'], base_input['well_tvd'], base_input['T_ust'],
+        pz_input['T_reservor_init'], pvt_input['Z_method'], base_input['viscosity_method'],
+        pvt_input['density_method'], base_input['hydraulic_resistance_method'],
+        base_input['hydraulic_resistance_coefficient'], base_input['well_tvd'],
+    )
+    vmin_tochigin = Tochigin(
+        pzab, pz_input['T_reservor_init'], base_input['sigm_water'],
+        base_input['condensate_density_kgm3'], base_input['d_nkt'],
+        pvt_input['Z_method'], pvt_input['density_method'], pvt_output['gas_relative_density'],
+    )
+    v_zab = Velosity(
+        pvt_input['Z_method'], pz_input['T_reservor_init'], qgas, pzab, base_input['d_nkt']
+    )
+    v_ust = Velosity(
+        pvt_input['Z_method'], base_input['T_ust'], qgas, pust, base_input['d_nkt']
+    )
+
+    if pust < base_input.get('min_wellhead_pressure_mpa', 5.0):
+        return 'минимальное устьевое давление'
+    min_bottom_velocity = max(
+        base_input.get('min_bottomhole_velocity_ms', 1.5), vmin_tochigin
+    )
+    if v_zab < min_bottom_velocity:
+        return 'минимальная скорость выноса жидкости'
+    if v_ust > base_input.get('max_wellhead_velocity_ms', 26.0):
+        return 'максимальная скорость на устье'
+    return ''
+
+
+def _validate_base_operation(
+    row, pvt_input, pvt_output, pz_input, base_input, previous_row=None
+):
+    """Применяет ограничения Excel к рассчитанному режиму базовой скважины."""
+    ppl = float(row['Ppl_on_start_period'])
+    drawdown = float(row['dP'])
+    pzab = float(row['Pzab'])
+    debit = float(row['debit_gaza_base'])
+
+    if (
+        previous_row is not None
+        and previous_row.get('operation_status') == 'остановлена'
+        and not base_input.get('restart_stopped_wells', False)
+    ):
+        return (
+            max(ppl, 0.0), 0.0, 0.0, 'остановлена',
+            previous_row.get('operation_limit', 'остановлена ранее'),
+        )
+
+    if row['mean_rab_basefond'] <= 0:
+        reason = 'нет действующего фонда'
+    elif ppl <= 0:
+        reason = 'неположительное пластовое давление'
+    elif drawdown <= 0:
+        reason = 'нет депрессии'
+    elif drawdown > base_input.get('max_depression_mpa', 10.0):
+        reason = 'максимальная депрессия'
+    elif ppl - drawdown <= 0:
+        reason = 'неположительное забойное давление'
+    elif debit <= 0:
+        reason = 'нет притока'
+    elif base_input.get('enforce_operating_limits', True):
+        reason = _operating_limit_reason(
+            debit, pzab, pvt_input, pvt_output, pz_input, base_input
+        )
+    else:
+        reason = ''
+
+    if reason:
+        return max(ppl, 0.0), 0.0, 0.0, 'остановлена', reason
+    return pzab, float(row['lmbda']), debit, 'работает', ''
 
 
 # from code_MBAL.Ld_MOD.Ld import Ld
@@ -101,9 +204,13 @@ def main():
             kgf_type_input = json.load(f)
             Pnk, kgf = kgf_type_input['Pnk'], kgf_type_input['KGF'] 
     #
-    # дополняем таблицу месяцами - 6 лет по месяцам - 72 месяца
+    # Условный прогноз источника рассчитан на 100 лет (1200 месяцев).
     for i in range(14,1201):
-        df_tabl.loc[i-1,["month","exploration_coeff","dP"]] = [i,base_input["default_exploration_coeff"],2.6] #заполнение оставшихся месяцев
+        df_tabl.loc[i-1,["month","exploration_coeff","dP"]] = [
+            i,
+            base_input["default_exploration_coeff"],
+            base_input.get("default_dP_mpa", 2.6),
+        ]
     #
     year_start = datetime(year = datetime.strptime(start_predcit_date, "%Y-%m-%d").year, month=12, day=1)
     df_tabl['date'] = df_tabl['month'].apply(lambda x: year_start + relativedelta(months=x))
@@ -146,9 +253,9 @@ def main():
     # А фильтр-й коэф-т (база), B фильтр-й коэф-т (база)
     df_tabl['A'],df_tabl['B'] = product_outputs_df['A_2param'].values[0],product_outputs_df['B_2param'].values[0]
     #
-    # Составляющие добычи Г и К по фондам
-    df_tabl = df_tabl.assign(Qgas_vns=0.0,Qgas_frac=0.0,Qgas_pvlg=0.0,Qgas_zbs=0.0,Qgas_rs=0.0,Qgas_vbd=0.0,Qgas_gtm=0.0,Qgas_periodic=0.0,         #столбцы добычи газа из разного фонда
-                             Qcond_vns=0.0,Qcond_frac=0.0,Qcond_pvlg=0.0,Qcond_zbs=0.0,Qcond_rs=0.0,Qcond_vbd=0.0,Qcond_gtm=0.0,Qcond_periodic=0.0) #столбцы добычи кондера из разного фонда
+    # Сохраняем переданные добычи ГТМ; отсутствующие колонки считаем нулевыми.
+    _ensure_contribution_columns(df_tabl, GAS_CONTRIBUTION_COLUMNS)
+    _ensure_contribution_columns(df_tabl, COND_CONTRIBUTION_COLUMNS)
     #  
     # расчет Рпл и Qнакоп на начало и конец периода
     for i in df_tabl.index: # по строкам
@@ -163,11 +270,15 @@ def main():
                                                         pz_input["aquifer_porosity"], pz_input["aquifer_radius"], pz_input["aquifer_thickness"],df_tabl.loc[i,'cum_time'],  
                                                         pz_input["drainage_angle"], pz_input["water_viscosity"], pz_input["sw"],pvt_input["Z_method"])
             # Забойное давление
-            df_tabl.loc[i,'Pzab'] = df_tabl.loc[i,'Ppl_on_start_period'] - df_tabl.loc[i,'dP']
+            df_tabl.loc[i,'Pzab'] = max(
+                df_tabl.loc[i,'Ppl_on_start_period'] - df_tabl.loc[i,'dP'], 0.0
+            )
             # 
             # расчет лямбды через ld
-            df_tabl.loc[i,'lmbda'] = Ld(pvt_input["Z_method"], pvt_input["density_method"], base_input["viscosity_method"],(df_tabl.loc[i,'Ppl_on_start_period']+df_tabl.loc[i,'Pzab'])/2, pz_input['T_reservor_init'])
-            #
+            df_tabl.loc[i,'lmbda'] = (
+                Ld(pvt_input["Z_method"], pvt_input["density_method"], base_input["viscosity_method"],(df_tabl.loc[i,'Ppl_on_start_period']+df_tabl.loc[i,'Pzab'])/2, pz_input['T_reservor_init'])
+                if df_tabl.loc[i,'Pzab'] > 0 else 0.0
+            )
             # Дебит газа базовых скважин
             if df_tabl.loc[i, 'mean_rab_basefond'] > 0:
                 if base_input["qgas_method"] == 'типовая зависимость':
@@ -176,12 +287,17 @@ def main():
                     df_tabl.loc[i, 'debit_gaza_base'] = fQLd(df_tabl.loc[i, 'A'], df_tabl.loc[i, 'B'], df_tabl.loc[i, 'lmbda'],df_tabl.loc[i, 'Ppl_on_start_period'], df_tabl.loc[i, 'Pzab'])
             else:
                 df_tabl.loc[i, 'debit_gaza_base'] = 0
+            (df_tabl.loc[i,'Pzab'], df_tabl.loc[i,'lmbda'],
+             df_tabl.loc[i,'debit_gaza_base'], df_tabl.loc[i,'operation_status'],
+             df_tabl.loc[i,'operation_limit']) = _validate_base_operation(
+                df_tabl.loc[i], pvt_input, pvt_output, pz_input, base_input
+            )
             #
             # Добыча газа из базовых скважин
             df_tabl.loc[i,'Qgas_base_fond'] = df_tabl.loc[i,['len_report_period','mean_rab_basefond','debit_gaza_base']].prod()/1000
             #
             # Добыча газа всего
-            df_tabl.loc[i,'Qgas_all'] = df_tabl.loc[i,['Qgas_base_fond','Qgas_vns','Qgas_frac','Qgas_pvlg','Qgas_zbs','Qgas_rs','Qgas_vbd','Qgas_gtm','Qgas_periodic']].sum()
+            df_tabl.loc[i,'Qgas_all'] = df_tabl.loc[i,['Qgas_base_fond', *GAS_CONTRIBUTION_COLUMNS]].sum()
             #          
             # Qнакоп на конец периода
             df_tabl.loc[i,'Qcum_gas_end_period'] = df_tabl.loc[i,['Qcum_gas_start_period','Qgas_all']].sum()
@@ -198,8 +314,13 @@ def main():
             # Для последующих периодов используем значение за предыдущий период
             df_tabl.loc[i,'Qcum_gas_start_period'] = df_tabl.loc[i-1, 'Qcum_gas_end_period']
             df_tabl.loc[i,'Ppl_on_start_period'] = df_tabl.loc[i-1,'Ppl_on_end_period']
-            df_tabl.loc[i,'Pzab'] = df_tabl.loc[i,'Ppl_on_start_period'] - df_tabl.loc[i,'dP']
-            df_tabl.loc[i,'lmbda'] = Ld(pvt_input["Z_method"], pvt_input["density_method"], base_input["viscosity_method"],(df_tabl.loc[i,'Ppl_on_start_period']+df_tabl.loc[i,'Pzab'])/2, pz_input['T_reservor_init'])
+            df_tabl.loc[i,'Pzab'] = max(
+                df_tabl.loc[i,'Ppl_on_start_period'] - df_tabl.loc[i,'dP'], 0.0
+            )
+            df_tabl.loc[i,'lmbda'] = (
+                Ld(pvt_input["Z_method"], pvt_input["density_method"], base_input["viscosity_method"],(df_tabl.loc[i,'Ppl_on_start_period']+df_tabl.loc[i,'Pzab'])/2, pz_input['T_reservor_init'])
+                if df_tabl.loc[i,'Pzab'] > 0 else 0.0
+            )
              # Дебит газа базовых скважин
             if df_tabl.loc[i, 'mean_rab_basefond'] > 0:
                 if base_input["qgas_method"] == 'типовая зависимость':
@@ -208,8 +329,14 @@ def main():
                     df_tabl.loc[i, 'debit_gaza_base'] = fQLd(df_tabl.loc[i, 'A'], df_tabl.loc[i, 'B'], df_tabl.loc[i, 'lmbda'],df_tabl.loc[i, 'Ppl_on_start_period'], df_tabl.loc[i, 'Pzab'])
             else:
                 df_tabl.loc[i, 'debit_gaza_base'] = 0
+            (df_tabl.loc[i,'Pzab'], df_tabl.loc[i,'lmbda'],
+             df_tabl.loc[i,'debit_gaza_base'], df_tabl.loc[i,'operation_status'],
+             df_tabl.loc[i,'operation_limit']) = _validate_base_operation(
+                df_tabl.loc[i], pvt_input, pvt_output, pz_input, base_input,
+                previous_row=df_tabl.loc[i-1],
+            )
             df_tabl.loc[i,'Qgas_base_fond'] = df_tabl.loc[i,['len_report_period','mean_rab_basefond','debit_gaza_base']].prod()/1000
-            df_tabl.loc[i,'Qgas_all'] = df_tabl.loc[i,['Qgas_base_fond','Qgas_vns','Qgas_frac','Qgas_pvlg','Qgas_zbs','Qgas_rs','Qgas_vbd','Qgas_gtm','Qgas_periodic']].sum()
+            df_tabl.loc[i,'Qgas_all'] = df_tabl.loc[i,['Qgas_base_fond', *GAS_CONTRIBUTION_COLUMNS]].sum()
             df_tabl.loc[i,'Qcum_gas_end_period'] = df_tabl.loc[i,['Qcum_gas_start_period','Qgas_all']].sum()
             df_tabl.loc[i,'Ppl_on_end_period'] = MBAL_fP(pz_input['P_reservor_init'], pz_input['T_reservor_init'], 
                                                 Z_calc(pvt_input["Z_method"],pz_input['P_reservor_init'],pz_input['T_reservor_init']), 
@@ -224,17 +351,19 @@ def main():
     # КГФ г/м3
     df_tabl['KGF'] = df_tabl.apply(lambda row: OGR_calc(base_input['kgf_method'], (row['Pzab'] + row['Ppl_mean'])/2),axis=1)
     #
-    # Дебит конденсата базовых скважин м3/сут
+    # Дебит конденсата базовых скважин т/сут
     df_tabl['debit_cond_base_t'] = df_tabl['debit_gaza_base']*df_tabl['KGF']/1000
     #
-    # Дебит конденсата базовых скважин т/сут
-    df_tabl['debit_cond_base_m3'] = df_tabl['debit_cond_base_t']*base_input['condensate_density_kgm3']*1000
+    # Дебит конденсата базовых скважин м3/сут
+    df_tabl['debit_cond_base_m3'] = df_tabl['debit_cond_base_t'].apply(
+        lambda value: condensate_tonnes_to_m3(value, base_input['condensate_density_kgm3'])
+    )
     #
     # Добыча конденсата из базовых скважин тыс.т
     df_tabl['Qcond_base_fond'] = df_tabl[['len_report_period','mean_rab_basefond','debit_cond_base_t']].prod(axis=1)/1000
     #
     # Добыча конденсата всего тыс т
-    df_tabl['Qcond_all'] = df_tabl[['Qcond_base_fond','Qcond_vns','Qcond_frac','Qcond_pvlg','Qcond_zbs','Qcond_rs','Qcond_vbd','Qcond_gtm','Qcond_periodic']].sum(axis=1)
+    df_tabl['Qcond_all'] = df_tabl[['Qcond_base_fond', *COND_CONTRIBUTION_COLUMNS]].sum(axis=1)
     #
     # Накопленная добыча конденсата на конец периода тыс.т
     df_tabl['Qcum_cond_end_period'] = df_tabl['Qcond_all'].cumsum()
@@ -270,9 +399,9 @@ def main():
     with open(r"code_sheets\PVT\gas_components.json", encoding="utf-8") as f:
         gas_components = pd.DataFrame(json.load(f))
     # E11,E12,E13 с листа PVT
-    Mw_propan = gas_components[gas_components['formula']=='C3H8']['Mw'].values[0],
-    Mw_izobutan = gas_components[gas_components['formula']=='i-C4H10']['Mw'].values[0],
-    Mw_nbutan = gas_components[gas_components['formula']=='n-C4H10']['Mw'].values[0],    
+    Mw_propan = gas_components[gas_components['formula']=='C3H8']['Mw'].values[0]
+    Mw_izobutan = gas_components[gas_components['formula']=='i-C4H10']['Mw'].values[0]
+    Mw_nbutan = gas_components[gas_components['formula']=='n-C4H10']['Mw'].values[0]
     # Давление начала конденсации
     
     #
@@ -352,15 +481,10 @@ def main():
     axs[1, 1].xaxis.set_major_locator(ticker.MultipleLocator(12))
     plt.tight_layout()
     #plt.show()
-    fig.savefig('code_sheets/Base/base_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(fig, 'code_sheets/Base/base_graph.png', dpi=300, bbox_inches='tight')
+    plt.close(fig)
     #
     # df_tabl['OIZ_gas_actual'] = oiz_gas - df_tabl['Qgas_all']
-    print(df_tabl[['Ppl_on_start_period','Ppl_on_end_period']])
-    print(df_tabl[['Qgas_all','Ppl_on_end_period','Qcum_gas_start_period','Qcum_gas_end_period']].iloc[[12,13]])
-    print(df_tabl[['Ppl_on_start_period','debit_gaza_base',]].iloc[[12,13]])
-    print(df_tabl[['v_zab','v_ust']])
-    print(df_tabl[['SPBT_t_t','SPBT_m_m3']])
-    print(df_tabl['oiz_cond'])
     #print(df_tabl['oiz_gas'])
 if __name__ == "__main__":
     main()

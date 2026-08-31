@@ -13,12 +13,16 @@ def fQ(A, b, Ppl, Pzab):
     Возвращает:
     - Q (float): дебит газа, м³/сут
     """
-    if A == 0:
+    pressure_drop = Ppl**2 - Pzab**2
+    if A == 0 or pressure_drop <= 0:
         return 0.0
+
+    if b == 0:
+        return max(pressure_drop / A, 0.0)
 
     A1 = b
     B1 = A
-    C1 = -(Ppl**2 - Pzab**2)
+    C1 = -pressure_drop
 
     D = B1**2 - 4 * A1 * C1
 

@@ -65,12 +65,13 @@ def prepare_workdir():
             target.mkdir(exist_ok=True, parents=True)
         else:
             # копируем только данные, .py не трогаем
-            if p.suffix.lower() in DATA_EXT:
+            if p.suffix.lower() in DATA_EXT and not target.exists():
                 target.parent.mkdir(exist_ok=True, parents=True)
                 shutil.copy2(p, target)
 
 def run_controllers():
     old_cwd = Path.cwd()
+    failures = []
     try:
         os.chdir(OUT_DIR)  # все относительные записи пойдут в run_data
         for name in MODULES:
@@ -83,16 +84,25 @@ def run_controllers():
                     print(f"[skip] {name} не содержит main()")
             except Exception as e:
                 print(f"[ERR] {name}: {e}")
+                failures.append((name, e))
     finally:
         os.chdir(old_cwd)
 
+    if failures:
+        details = "; ".join(f"{name}: {error}" for name, error in failures)
+        raise RuntimeError(f"Ошибки в {len(failures)} модуле(ях): {details}")
+
 def show_graphs():
+    if plt.get_backend().lower() == "agg":
+        return
+
     shown = False
     for rel, title in GRAPH_FILES.items():
         path = OUT_DIR / rel
         if path.exists():
             try:
-                img = Image.open(path)
+                with Image.open(path) as source:
+                    img = source.copy()
                 fig = plt.figure(num=title)
                 plt.imshow(img)
                 plt.axis("off")

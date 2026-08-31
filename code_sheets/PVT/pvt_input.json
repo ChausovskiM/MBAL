@@ -2,12 +2,12 @@
   "P_plast_MPA": 20.966,
   "T_plast_C": 59.5,
   "potential_content_gm3": 88.2,
-  "Z_method": "пенг-робинсон",
+  "Z_method": "латонов-гуревич",
   "Z_fact": 0.904,
   "density_method": "Корреляция",
-  "viscosity_method": "jossi stiel thodos",
-  "viscosity_fact_cP": 0.024,
+  "viscosity_method": "lee-gonzalez",
+  "viscosity_fact_cP": 0.02373,
   "condensate_density_kgm3": 754.0,
-  "KIK": 0.54,
+  "KIK": 0.5369207773,
   "KIG": 0.92
 }
