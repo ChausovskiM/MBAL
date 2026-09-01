@@ -1,16 +1,11 @@
-import openpyxl
 import os
 import json
 import math
 import sys
-#
-import numpy as np
 import pandas as pd
-import datetime
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
-from datetime import datetime, date
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
 
@@ -55,6 +50,61 @@ def _ensure_contribution_columns(df_tabl, columns):
             df_tabl[column] = 0.0
         else:
             df_tabl[column] = pd.to_numeric(df_tabl[column], errors='coerce').fillna(0.0)
+
+
+def _ensure_numeric_columns(df_tabl, defaults):
+    """Сохраняет пользовательский помесячный график и заполняет его пробелы."""
+    for column, default in defaults.items():
+        if column not in df_tabl:
+            df_tabl[column] = default
+        else:
+            df_tabl[column] = pd.to_numeric(
+                df_tabl[column], errors='coerce'
+            ).fillna(default)
+
+
+def _apply_well_schedule(df_tabl, entry_wells):
+    """Рассчитывает фонд и отклоняет физически невозможный график скважин."""
+    entry_value = float(entry_wells)
+    if not math.isfinite(entry_value) or entry_value < 0:
+        raise ValueError("Начальный фонд скважин должен быть конечным и неотрицательным")
+
+    df_tabl['rab_fond_on_start_period'] = 0
+    df_tabl['rab_fond_on_end_period'] = 0
+    current_fund = int(entry_value) if entry_value.is_integer() else entry_value
+
+    for index in df_tabl.index:
+        introduced = df_tabl.loc[index, 'vvod_wells_in_curr_period']
+        retired = df_tabl.loc[index, 'leave_base_fond']
+        retiring_days = float(df_tabl.loc[index, 'time_prod_leaving_wells'])
+        period_days = float(df_tabl.loc[index, 'len_report_period'])
+
+        if not all(math.isfinite(float(value)) for value in (
+            introduced, retired, retiring_days, period_days
+        )):
+            raise ValueError(f"График фонда содержит нечисловое значение (строка {index})")
+        if introduced < 0 or retired < 0:
+            raise ValueError(
+                f"Ввод и выбытие скважин не могут быть отрицательными (строка {index})"
+            )
+        if retiring_days < 0 or retiring_days > period_days:
+            raise ValueError(
+                f"Время работы выбывающих скважин должно быть от 0 до "
+                f"{period_days:g} суток (строка {index})"
+            )
+
+        available = current_fund + introduced
+        if retired > available:
+            raise ValueError(
+                f"Нельзя вывести {retired:g} скв. при доступном фонде "
+                f"{available:g} скв. (строка {index})"
+            )
+
+        df_tabl.loc[index, 'rab_fond_on_start_period'] = current_fund
+        current_fund = available - retired
+        df_tabl.loc[index, 'rab_fond_on_end_period'] = current_fund
+
+    return df_tabl
 
 
 def _operating_limit_reason(qgas, pzab, pvt_input, pvt_output, pz_input, base_input):
@@ -102,6 +152,7 @@ def _validate_base_operation(
     if (
         previous_row is not None
         and previous_row.get('operation_status') == 'остановлена'
+        and previous_row.get('operation_limit') != 'нет действующего фонда'
         and not base_input.get('restart_stopped_wells', False)
     ):
         return (
@@ -132,34 +183,6 @@ def _validate_base_operation(
         return max(ppl, 0.0), 0.0, 0.0, 'остановлена', reason
     return pzab, float(row['lmbda']), debit, 'работает', ''
 
-
-# from code_MBAL.Ld_MOD.Ld import Ld
-# from code_MBAL.Pust_MOD.Pust import Pust
-# from code_MBAL.TEMP_MOD.Tust import Tust
-
-# from code_MBAL.Pust_MOD.Ld_MOD.Ld_calc import Ld_calc
-
-def calculate_date(date_str):
-    try:
-        # Преобразуем строку в объект даты
-        c3 = datetime.strptime(date_str, "%Y-%m-%d").date()
-
-        # Вычисляем новую дату
-        new_date = date(year = c3.year - 1, month=1, day=1)
-    except:
-        # В случае ошибки возвращаем текущую дату
-        new_date = date.today()
-
-    return new_date
-
-def increment_year_to_january(date_str):
-    # Преобразуем строку в объект даты
-    input_date = datetime.strptime(date_str, "%Y-%m-%d")
-
-    # Увеличиваем год на 1 и устанавливаем месяц и день на январь и 1
-    output_date = datetime(year=input_date.year + 1, month=1, day=1)
-
-    return output_date
 
 # Функция для определения количества дней в месяце
 def days_in_month(date):
@@ -221,25 +244,16 @@ def main():
     # Продолжительность отчетного периода
     df_tabl['len_report_period'] = df_tabl['date'].apply(days_in_month)
     #
-    # Выбытие базового фонда
-    df_tabl['leave_base_fond'] = 0 #в этих ячейках не было формулы!нули Уточнить
-    # Время работы выбывших скважин
-    df_tabl['time_prod_leaving_wells'] = 0 #в этих ячейках не было формулы!нули Уточнить
-    # Ввод скважин в NNNN году
-    df_tabl['vvod_wells_in_curr_period'] = 0
+    # График движения фонда задаётся пользователем, как и в исходной книге.
+    # Если колонок нет, сохраняется прежнее поведение с нулевыми значениями.
+    _ensure_numeric_columns(df_tabl, {
+        'leave_base_fond': 0,
+        'time_prod_leaving_wells': 0,
+        'vvod_wells_in_curr_period': 0,
+    })
     #
-    # Действующий базовый фонд на начало периода/на конец периода
-    df_tabl = df_tabl.assign(rab_fond_on_start_period = 0, rab_fond_on_end_period = 0) # Инициализируем столбцы
-    df_tabl.loc[0,'rab_fond_on_start_period'] = base_input['entry_wells']
-    # Рассчитываем значения
-    for i in df_tabl.index:
-        if i == 0:
-            # Для первого периода используем начальное значение
-            df_tabl.loc[i, 'rab_fond_on_end_period'] = (df_tabl.loc[i, 'vvod_wells_in_curr_period'] - df_tabl.loc[i, 'leave_base_fond'] + df_tabl.loc[i, 'rab_fond_on_start_period'])
-        else:
-            # Для последующих периодов используем значение за предыдущий период
-            df_tabl.loc[i, 'rab_fond_on_start_period'] = df_tabl.loc[i-1, 'rab_fond_on_end_period']
-            df_tabl.loc[i, 'rab_fond_on_end_period'] = (df_tabl.loc[i, 'vvod_wells_in_curr_period'] - df_tabl.loc[i, 'leave_base_fond'] + df_tabl.loc[i, 'rab_fond_on_start_period'])
+    # Действующий базовый фонд на начало/конец периода.
+    df_tabl = _apply_well_schedule(df_tabl, base_input['entry_wells'])
 
     #Общее время работы скважин
     df_tabl['all_time_inprod'] = df_tabl['len_report_period']*df_tabl['rab_fond_on_end_period'] + df_tabl['leave_base_fond']*df_tabl['time_prod_leaving_wells']

@@ -18,16 +18,30 @@ OUT_DIR  = (APP_DIR / "run_data") if FROZEN else APP_DIR
 if str(BASE_READ) not in sys.path:
     sys.path.insert(0, str(BASE_READ))
 
-MODULES = [
-    "code_sheets.PVT.pvt_controller",
-    "code_sheets.KGF.kgf_controller",
-    "code_sheets.PZ.pz_controller",
-    "code_sheets.Components.components_controller",
-    "code_sheets.GDI.gdi_controller",
-    "code_sheets.Productivity.prod_controller",
-    "code_sheets.Temperature.temperature_controller",
-    "code_sheets.Base.base_controller",
-]
+# Статические импорты нужны в том числе сборщику PyInstaller: строковые
+# importlib-импорты он самостоятельно не обнаруживает.
+from code_sheets.PVT import pvt_controller as _pvt_controller
+from code_sheets.KGF import kgf_controller as _kgf_controller
+from code_sheets.PZ import pz_controller as _pz_controller
+from code_sheets.Components import components_controller as _components_controller
+from code_sheets.GDI import gdi_controller as _gdi_controller
+from code_sheets.Productivity import prod_controller as _prod_controller
+from code_sheets.Temperature import temperature_controller as _temperature_controller
+from code_sheets.Base import base_controller as _base_controller
+from code_sheets.Summary import summary_controller as _summary_controller
+
+CONTROLLERS = {
+    "code_sheets.PVT.pvt_controller": _pvt_controller,
+    "code_sheets.KGF.kgf_controller": _kgf_controller,
+    "code_sheets.PZ.pz_controller": _pz_controller,
+    "code_sheets.Components.components_controller": _components_controller,
+    "code_sheets.GDI.gdi_controller": _gdi_controller,
+    "code_sheets.Productivity.prod_controller": _prod_controller,
+    "code_sheets.Temperature.temperature_controller": _temperature_controller,
+    "code_sheets.Base.base_controller": _base_controller,
+    "code_sheets.Summary.summary_controller": _summary_controller,
+}
+MODULES = list(CONTROLLERS)
 
 GRAPH_FILES = {
     "code_sheets/PVT/pvt_graph.png": "PVT",
@@ -36,6 +50,7 @@ GRAPH_FILES = {
     "code_sheets/Components/components_graph.png": "Состав",
     "code_sheets/GDI/gdi_graph.png": "Обработка ГДИ",
     "code_sheets/Base/base_graph.png": "База",
+    "code_sheets/Summary/summary_graph.png": "Сводный отчёт",
 }
 
 # копируем только данные (не .py), и только в .exe
@@ -77,7 +92,7 @@ def run_controllers():
         for name in MODULES:
             try:
                 print(f"Running: {name}")
-                mod = importlib.import_module(name)
+                mod = CONTROLLERS.get(name) or importlib.import_module(name)
                 if hasattr(mod, "main"):
                     mod.main()
                 else:
