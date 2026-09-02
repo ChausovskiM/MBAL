@@ -16,6 +16,7 @@ from code_MBAL.Z_MOD.Z_calc import Z_calc
 from code_MBAL.Density_MOD.Density_calc import Density_calc
 from code_MBAL.Visc_MOD.Visc_calc import Visc_calc
 from code_MBAL.Complementary_functions.OGR_calc import OGR_calc
+from code_MBAL.common.paths import runtime_path
 
 def number(q, data_range):
     if q == 0:
@@ -36,23 +37,23 @@ def effective_length(h_xy, h_z, ntg):
 
 def main():
     # Открываем инпуты от текущего листа Продуктивность
-    with open(r"code_sheets\Productivity\prod_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "Productivity", "prod_input.json").open('r', encoding='utf-8') as f:
         prod_input = json.load(f)
     ofp_gas = prod_input["ofp_gas"]
     kgf_method = prod_input["kgf_method"]
     df_w_table = pd.DataFrame(prod_input["well_table"])    
     # Открываем инпуты от текущего листа PVT
-    with open(r"code_sheets\PVT\pvt_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PVT", "pvt_input.json").open('r', encoding='utf-8') as f:
         pvt_input = json.load(f)
     # 
-    with open(r"code_sheets\PVT\pvt_output.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PVT", "pvt_output.json").open('r', encoding='utf-8') as f:
         pvt_output = json.load(f)
     relative_dens = pvt_output["gas_relative_density"] #отн плотность газа по воздуху
     T_C_plast = pvt_input["T_plast_C"]
     density_method = pvt_input["density_method"]
     visc_method = pvt_input["viscosity_method"]
     # Открываем инпуты от текущего листа ГДИ
-    with open(r"code_sheets\PZ\pz_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PZ", "pz_input.json").open('r', encoding='utf-8') as f:
         pz_input = json.load(f)
     Z_method = pz_input["Z_method"]
     #
@@ -266,7 +267,7 @@ def main():
         # добавить Оценка изменения А и В от от времени остановки скважин
         "results_table": df_w_table.to_dict(orient="list") 
     }
-    with open('code_sheets/Productivity/productivity_output.json', 'w', encoding='utf-8') as f:
+    with runtime_path('code_sheets', 'Productivity', 'productivity_output.json').open('w', encoding='utf-8') as f:
         json.dump(summary, f, ensure_ascii=False, indent=4)
     #print(df_w_table[['A_pseudo','B_pseudo','Qgas_pseudo','drill_ranking']])
     #print(df_w_table['lmbd(Psr)'].values[0])

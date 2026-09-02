@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,8 +12,7 @@ from code_MBAL.Visc_MOD.Visc_calc import Visc_calc
 from code_MBAL.Visc_MOD.Visc_Lee_Gonzalez import Visc_Lee_Gonzalez
 from code_MBAL.Visc_MOD.Visc_JST import Visc_JST
 from code_MBAL.common.gas_mixture import calc_mixture_params, load_gas_components, prepare_inputs_from_components
-
-BASE_DIR = Path(__file__).resolve().parents[2]
+from code_MBAL.common.paths import runtime_path
 
 # === Расчёт значений для таблицы (строки 4,5,6,8,10,12,13,15,17,18,19) ===
 def main():
@@ -23,10 +21,12 @@ def main():
     # script_dir = os.path.dirname(os.path.abspath(__file__))
     # file_path = os.path.join(script_dir, "import_properties.json")
     #
-    with (BASE_DIR / "code_sheets" / "PVT" / "pvt_input.json").open("r", encoding="utf-8") as f:
+    with runtime_path("code_sheets", "PVT", "pvt_input.json").open("r", encoding="utf-8") as f:
         props = json.load(f)
 
-    gas_components = load_gas_components(BASE_DIR / "code_sheets" / "PVT" / "gas_components.json")
+    gas_components = load_gas_components(
+        runtime_path("code_sheets", "PVT", "gas_components.json")
+    )
     # props = load_input("input_properties.json")
     # gas_components = pd.DataFrame(load_components("gas_components.json"))
     
@@ -83,7 +83,7 @@ def main():
         "Bg": round(Bg, 5)
     }
 
-    with open("code_sheets/PVT/pvt_output.json", "w", encoding="utf-8") as f:
+    with runtime_path("code_sheets", "PVT", "pvt_output.json").open("w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
     #=======ТАБЛИЦА 2.ТАБЛИЧНЫЕ ДАННЫЕ=========
     P_list = [0.1, 5.1, 10.1, 15.1, 20.1, 25.1, 30.1, 35.1, 40.1, 45.1, 50.1, 55.1, 60.1, 65.1, 70.1]
@@ -107,7 +107,10 @@ def main():
     df['Bg'] = 101325 * (T_C_plast + 273.15) * df['ZBB'] / (df['P_MPA']*10**6 * 293.15)
     df.loc[0,'Bg'] = pd.NA
 
-    df.to_json('code_sheets/PVT/output_pvt_results.json', orient='records', lines=True)
+    df.to_json(
+        runtime_path('code_sheets', 'PVT', 'output_pvt_results.json'),
+        orient='records', lines=True,
+    )
     #df.to_excel('code_sheets/PVT/graf.xlsx')
     # === 2 строки × 2 столбца ===
     fig, axs = plt.subplots(2, 2, figsize=(14, 10))
@@ -145,7 +148,10 @@ def main():
 
     plt.tight_layout()
     #plt.show()
-    save_figure(fig, 'code_sheets/PVT/pvt_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(
+        fig, runtime_path('code_sheets', 'PVT', 'pvt_graph.png'),
+        dpi=300, bbox_inches='tight',
+    )
     plt.close(fig)
 
 if __name__ == "__main__":

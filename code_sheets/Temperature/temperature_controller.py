@@ -20,18 +20,19 @@ from code_MBAL.Pust_MOD.Pust import Pust
 from code_MBAL.TEMP_MOD.Tust import Tust
 
 from code_MBAL.Pust_MOD.Ld_MOD.Ld_calc import Ld_calc
+from code_MBAL.common.paths import runtime_path
 
 def main():
 # Открываем инпуты от текущего листа Температура
-    with open(r"code_sheets\Temperature\temperature_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "Temperature", "temperature_input.json").open('r', encoding='utf-8') as f:
         temp_input = json.load(f)
 # Открываем инпуты/оутпуты от текущего листа PVT
-    with open(r"code_sheets\PVT\pvt_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PVT", "pvt_input.json").open('r', encoding='utf-8') as f:
         pvt_input = json.load(f)
     T_C_plast = pvt_input["T_plast_C"]
     cond_density = pvt_input["condensate_density_kgm3"] #плотность конденсата
     #
-    with open(r"code_sheets\PVT\pvt_output.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PVT", "pvt_output.json").open('r', encoding='utf-8') as f:
         pvt_output = json.load(f)
     relative_dens = pvt_output["gas_relative_density"] #отн плотность газа по воздуху
     density_input = pvt_output ["rho_std"] #Плотность газа (Плотность газа в стд условиях) 0.745
@@ -78,7 +79,7 @@ def main():
         "P_ust":round(P_ust2,4),
         }
 
-    with open('code_sheets/Temperature/temperature_output.json', 'w', encoding='utf-8') as f:
+    with runtime_path('code_sheets', 'Temperature', 'temperature_output.json').open('w', encoding='utf-8') as f:
         json.dump(summary, f, ensure_ascii=False, indent=4)                                                               
 if __name__ == "__main__":
     main()

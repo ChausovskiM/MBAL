@@ -1,14 +1,12 @@
 """Помесячный и годовой сводный отчёт по результатам листа «База»."""
 
 import json
-import os
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from code_MBAL.Complementary_functions.save_figure import save_figure
+from code_MBAL.common.paths import runtime_path
 
 
 CONTRIBUTIONS = {
@@ -76,9 +74,14 @@ def build_summary(base_frame, condensate_density_kgm3):
     periodic_dp = _optional_numeric(source, "periodic_dP")
     periodic_pust = _optional_numeric(source, "periodic_Pust")
     if "operation_status" in source:
-        base_operating = source["operation_status"].eq("работает").astype(float)
+        base_operating = (
+            source["operation_status"].eq("работает")
+            & source["rab_fond_on_end_period"].gt(0)
+        ).astype(float)
     else:
-        base_operating = pd.Series(1.0, index=source.index)
+        base_operating = source["rab_fond_on_end_period"].gt(0).astype(float)
+    periodic_operating = periodic_active.gt(0).astype(float)
+    operating_group_count = base_operating + periodic_operating
     available_wells = source["rab_fond_on_end_period"] + periodic_active
     active_wells = source["rab_fond_on_end_period"] * base_operating + periodic_active
     if "mean_rab_basefond" in source:
@@ -100,6 +103,20 @@ def build_summary(base_frame, condensate_density_kgm3):
     mean_reservoir_pressure = (
         source["Ppl_on_start_period"] + source["Ppl_on_end_period"]
     ) / 2
+    excel_mean_drawdown = (source["dP"] + periodic_dp) / 2
+    operating_mean_drawdown = _safe_ratio(
+        source["dP"] * base_operating + periodic_dp * periodic_operating,
+        operating_group_count,
+    )
+    operating_mean_wellhead_pressure = _safe_ratio(
+        source["Pust"] * base_operating + periodic_pust * periodic_operating,
+        operating_group_count,
+    )
+    operating_mean_bottomhole_pressure = np.where(
+        operating_group_count > 0,
+        mean_reservoir_pressure - operating_mean_drawdown,
+        0.0,
+    )
 
     monthly = pd.DataFrame({
         "date": source["date"],
@@ -121,12 +138,13 @@ def build_summary(base_frame, condensate_density_kgm3):
         "bottomhole_pressure_mpa": source["Pzab"],
         # Эти два поля повторяют AVERAGE из Excel, включая нулевой
         # периодический фонд. Ниже также сохраняются физически корректные поля.
-        "mean_drawdown_mpa": (source["dP"] + periodic_dp) / 2,
+        "mean_drawdown_mpa": excel_mean_drawdown,
         "mean_wellhead_pressure_mpa": (source["Pust"] + periodic_pust) / 2,
-        "operating_mean_drawdown_mpa": source["dP"],
-        "operating_mean_wellhead_pressure_mpa": source["Pust"],
+        "operating_mean_drawdown_mpa": operating_mean_drawdown,
+        "operating_mean_wellhead_pressure_mpa": operating_mean_wellhead_pressure,
         "mean_reservoir_pressure_mpa": mean_reservoir_pressure,
-        "mean_bottomhole_pressure_mpa": mean_reservoir_pressure - source["dP"],
+        "mean_bottomhole_pressure_mpa": mean_reservoir_pressure - excel_mean_drawdown,
+        "operating_mean_bottomhole_pressure_mpa": operating_mean_bottomhole_pressure,
         "cumulative_gas_mm3": source["Qcum_gas_end_period"],
         "cumulative_condensate_kt": source["Qcum_cond_end_period"],
         "remaining_gas_mm3": source["oiz_gas"],
@@ -134,15 +152,6 @@ def build_summary(base_frame, condensate_density_kgm3):
         "spbt_kt": source["SPBT_t_t"],
         "spbt_mm3": source["SPBT_m_m3"],
     })
-
-    # Физические показатели усредняются только между работающими группами.
-    has_periodic = periodic_active > 0
-    monthly.loc[has_periodic, "operating_mean_drawdown_mpa"] = (
-        source.loc[has_periodic, "dP"] + periodic_dp.loc[has_periodic]
-    ) / 2
-    monthly.loc[has_periodic, "operating_mean_wellhead_pressure_mpa"] = (
-        source.loc[has_periodic, "Pust"] + periodic_pust.loc[has_periodic]
-    ) / 2
 
     # Excel использует конечный доступный фонд; operating_* использует
     # фактические скважино-сутки и остаётся информативным при остановках.
@@ -203,11 +212,22 @@ def build_summary(base_frame, condensate_density_kgm3):
     ]]
     annual_mean = monthly.groupby("year", as_index=False)[[
         "mean_drawdown_mpa", "mean_wellhead_pressure_mpa",
-        "operating_mean_drawdown_mpa", "operating_mean_wellhead_pressure_mpa",
         "mean_reservoir_pressure_mpa", "mean_bottomhole_pressure_mpa",
     ]].mean()
+    operating_mean_columns = [
+        "operating_mean_drawdown_mpa",
+        "operating_mean_wellhead_pressure_mpa",
+        "operating_mean_bottomhole_pressure_mpa",
+    ]
+    annual_operating_mean = (
+        monthly.loc[monthly["active_wells"] > 0]
+        .groupby("year", as_index=False)[operating_mean_columns]
+        .mean()
+    )
     annual = annual.merge(annual_first, on="year").merge(annual_last, on="year")
     annual = annual.merge(annual_mean, on="year")
+    annual = annual.merge(annual_operating_mean, on="year", how="left")
+    annual[operating_mean_columns] = annual[operating_mean_columns].fillna(0.0)
     annual["mean_gas_rate_km3_day"] = _safe_ratio(
         annual["base_gas_production_mm3"] * 1000,
         annual["available_wells"] * annual["days"],
@@ -244,11 +264,10 @@ def build_summary(base_frame, condensate_density_kgm3):
 
 
 def main():
-    root = Path(os.environ.get("MBAL_OUT_DIR", Path(__file__).resolve().parents[2]))
-    base_output = root / "code_sheets" / "Base" / "base_output.json"
-    base_input_path = root / "code_sheets" / "Base" / "base_input.json"
-    output = root / "code_sheets" / "Summary" / "summary_output.json"
-    graph = root / "code_sheets" / "Summary" / "summary_graph.png"
+    base_output = runtime_path("code_sheets", "Base", "base_output.json")
+    base_input_path = runtime_path("code_sheets", "Base", "base_input.json")
+    output = runtime_path("code_sheets", "Summary", "summary_output.json")
+    graph = runtime_path("code_sheets", "Summary", "summary_graph.png")
 
     with base_output.open(encoding="utf-8") as stream:
         base_frame = pd.DataFrame(json.load(stream))
@@ -267,11 +286,18 @@ def main():
             "excel_compatible": [
                 "mean_drawdown_mpa",
                 "mean_wellhead_pressure_mpa",
+                "mean_reservoir_pressure_mpa",
+                "mean_bottomhole_pressure_mpa",
                 "mean_gas_rate_km3_day",
                 "condensate_rate_t_day",
                 "condensate_rate_m3_day",
             ],
             "operating_metrics": "Поля operating_* исключают отсутствующий или остановленный фонд.",
+            "annual_pressure_aggregation": (
+                "Годовые средние давления используют все месяцы календарного года. "
+                "Это исправляет формулу База!Q98 исходной книги, где за 2024 год "
+                "случайно усреднены только июль–декабрь."
+            ),
         },
     }
     output.write_text(

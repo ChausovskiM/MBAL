@@ -24,6 +24,7 @@ from code_MBAL.Complementary_functions.OGR_calc import OGR_calc
 from code_MBAL.Velosity_MOD.Velosity import Velosity
 from code_MBAL.Complementary_functions.Composition_MOD.Composition_calc import Composition_calc
 from code_MBAL.Complementary_functions.save_figure import save_figure
+from code_MBAL.common.paths import runtime_path
 
 
 GAS_CONTRIBUTION_COLUMNS = [
@@ -107,14 +108,64 @@ def _apply_well_schedule(df_tabl, entry_wells):
     return df_tabl
 
 
+def _build_forecast_table(
+    table_data, horizon_months, default_exploration_coeff, default_dp_mpa
+):
+    """Выравнивает пользовательский режим по месяцам, не затирая введённые данные."""
+    frame = pd.DataFrame(table_data).copy()
+    if 'month' not in frame:
+        raise ValueError("В Base.table_data отсутствует колонка month")
+
+    months = pd.to_numeric(frame['month'], errors='coerce')
+    if months.isna().any() or (months % 1 != 0).any():
+        raise ValueError("Номера месяцев должны быть целыми числами")
+    frame['month'] = months.astype(int)
+    if frame['month'].duplicated().any():
+        raise ValueError("В Base.table_data есть повторяющиеся месяцы")
+    if not frame['month'].between(1, horizon_months).all():
+        raise ValueError(f"Номер месяца должен быть от 1 до {horizon_months}")
+
+    frame = frame.set_index('month').reindex(range(1, horizon_months + 1))
+    frame.index.name = 'month'
+    for column, default in {
+        'exploration_coeff': default_exploration_coeff,
+        'dP': default_dp_mpa,
+    }.items():
+        if column not in frame:
+            frame[column] = default
+            continue
+        values = pd.to_numeric(frame[column], errors='coerce')
+        invalid = frame[column].notna() & values.isna()
+        if invalid.any():
+            raise ValueError(f"Колонка {column} содержит нечисловое значение")
+        frame[column] = values.fillna(default)
+
+    if not frame['exploration_coeff'].between(0, 1).all():
+        raise ValueError("Коэффициент эксплуатации должен быть от 0 до 1")
+    if (frame['dP'] < 0).any():
+        raise ValueError("Депрессия не может быть отрицательной")
+    return frame.reset_index()
+
+
+def _calculate_base_wellhead_pressure(
+    pzab, qgas, base_input, pvt_input, pvt_output, pz_input
+):
+    """Считает Ру с MD для трения и TVD для гидростатического столба."""
+    return Pust(
+        pzab, qgas, base_input['d_nkt'], base_input['pipe_absolute_roughness'],
+        pvt_output['gas_relative_density'],
+        base_input.get('well_md', base_input['well_tvd']), base_input['T_ust'],
+        pz_input['T_reservor_init'], pvt_input['Z_method'],
+        base_input['viscosity_method'], pvt_input['density_method'],
+        base_input['hydraulic_resistance_method'],
+        base_input['hydraulic_resistance_coefficient'], base_input['well_tvd'],
+    )
+
+
 def _operating_limit_reason(qgas, pzab, pvt_input, pvt_output, pz_input, base_input):
     """Возвращает причину остановки скважины или пустую строку."""
-    pust = Pust(
-        pzab, qgas, base_input['d_nkt'], base_input['pipe_absolute_roughness'],
-        pvt_output['gas_relative_density'], base_input['well_tvd'], base_input['T_ust'],
-        pz_input['T_reservor_init'], pvt_input['Z_method'], base_input['viscosity_method'],
-        pvt_input['density_method'], base_input['hydraulic_resistance_method'],
-        base_input['hydraulic_resistance_coefficient'], base_input['well_tvd'],
+    pust = _calculate_base_wellhead_pressure(
+        pzab, qgas, base_input, pvt_input, pvt_output, pz_input
     )
     vmin_tochigin = Tochigin(
         pzab, pz_input['T_reservor_init'], base_input['sigm_water'],
@@ -192,48 +243,44 @@ def days_in_month(date):
 
 def main():
     # инпуты листа PVT
-    with open(r"code_sheets\PVT\pvt_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PVT", "pvt_input.json").open('r', encoding='utf-8') as f:
         pvt_input = json.load(f) 
     # Оутпут листа PVT
-    with open(r"code_sheets\PVT\pvt_output.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PVT", "pvt_output.json").open('r', encoding='utf-8') as f:
         pvt_output = json.load(f)    
     # инпуты листа PZ
-    with open(r"code_sheets\PZ\pz_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PZ", "pz_input.json").open('r', encoding='utf-8') as f:
         pz_input = json.load(f)
     start_dev_date = pz_input["start_dev_date"]
     start_predcit_date = pz_input["start_predict_date"]
     #
     # Инпуты листа БАЗА
-    with open(r"code_sheets\Base\base_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "Base", "base_input.json").open('r', encoding='utf-8') as f:
         base_input = json.load(f)
-    df_tabl = pd.DataFrame(base_input["table_data"])
+    df_tabl = _build_forecast_table(
+        base_input["table_data"], 1200,
+        base_input["default_exploration_coeff"],
+        base_input.get("default_dP_mpa", 2.6),
+    )
     # Оутпуты листа Продуктивность
-    with open(r"code_sheets\Productivity\productivity_output.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "Productivity", "productivity_output.json").open('r', encoding='utf-8') as f:
         product_outputs_df = pd.DataFrame(json.load(f)["results_table"])
     #
     # определяем 1) Давление начала конденсации 2) Начальный КГФ
     if base_input['kgf_method'] == "experimental data":
         # Инпуты листа КГФ - ЭКСПЕРИМЕНТАЛЬНАЯ ЗАВИСИМОСТЬ
-        with open(r"code_sheets\KGF\kgf_experimental_input.json", encoding="utf-8") as f:
+        with runtime_path("code_sheets", "KGF", "kgf_experimental_input.json").open(encoding="utf-8") as f:
             kgf_exp_input = json.load(f)
         Pnk, kgf = kgf_exp_input['Pnk'], kgf_exp_input['Pnk']
         # Оутпут листа КГФ
-        with open(r"code_sheets\KGF\kgf_output.json", encoding="utf-8") as f:
+        with runtime_path("code_sheets", "KGF", "kgf_output.json").open(encoding="utf-8") as f:
             kgf_output = json.load(f)
         kgf = kgf_output['C5_plus']
     elif base_input['kgf_method'] == "typical dependence": 
         # Инпуты листа КГФ - ТИПОВАЯ ЗАВИСИМОСТЬ
-        with open(r"code_sheets\KGF\kgf_typical_input.json", encoding="utf-8") as f:
+        with runtime_path("code_sheets", "KGF", "kgf_typical_input.json").open(encoding="utf-8") as f:
             kgf_type_input = json.load(f)
             Pnk, kgf = kgf_type_input['Pnk'], kgf_type_input['KGF'] 
-    #
-    # Условный прогноз источника рассчитан на 100 лет (1200 месяцев).
-    for i in range(14,1201):
-        df_tabl.loc[i-1,["month","exploration_coeff","dP"]] = [
-            i,
-            base_input["default_exploration_coeff"],
-            base_input.get("default_dP_mpa", 2.6),
-        ]
     #
     year_start = datetime(year = datetime.strptime(start_predcit_date, "%Y-%m-%d").year, month=12, day=1)
     df_tabl['date'] = df_tabl['month'].apply(lambda x: year_start + relativedelta(months=x))
@@ -391,10 +438,13 @@ def main():
     df_tabl['oiz_cond'] = oiz_cond - df_tabl['Qcum_cond_end_period']
     #
     # Устьевое давление (m-gas_relative_density)
-    df_tabl['Pust'] = df_tabl.apply(lambda row: Pust(row['Pzab'],row['debit_gaza_base'],base_input['d_nkt'],base_input['pipe_absolute_roughness'],pvt_output['gas_relative_density'],
-                                                     base_input['well_tvd'],base_input['T_ust'],pz_input['T_reservor_init'],pvt_input["Z_method"], 
-                                                     base_input["viscosity_method"],pvt_input["density_method"],base_input['hydraulic_resistance_method'],
-                                                     base_input['hydraulic_resistance_coefficient'],base_input['well_tvd']),axis =1)
+    df_tabl['Pust'] = df_tabl.apply(
+        lambda row: _calculate_base_wellhead_pressure(
+            row['Pzab'], row['debit_gaza_base'], base_input,
+            pvt_input, pvt_output, pz_input,
+        ),
+        axis=1,
+    )
     # Минимальная скорость для выноса жидкости (Точигин)
     df_tabl['vmin_Tochigin'] = df_tabl.apply(lambda row: Tochigin(row['Pzab'],pz_input['T_reservor_init'],base_input['sigm_water'],base_input['condensate_density_kgm3'],
                                                                   base_input['d_nkt'],pvt_input['Z_method'],pvt_input["density_method"],pvt_output['gas_relative_density']),axis=1)
@@ -410,7 +460,7 @@ def main():
     #
     # Содержание C3-C4 в объеме пластового газа
     #загрузка данных композиционного состава
-    with open(r"code_sheets\PVT\gas_components.json", encoding="utf-8") as f:
+    with runtime_path("code_sheets", "PVT", "gas_components.json").open(encoding="utf-8") as f:
         gas_components = pd.DataFrame(json.load(f))
     # E11,E12,E13 с листа PVT
     Mw_propan = gas_components[gas_components['formula']=='C3H8']['Mw'].values[0]
@@ -434,7 +484,10 @@ def main():
     df_tabl['SPBT_m_m3'] = (comp1 + comp2 + comp3)/100*df_tabl['Qgas_all']
     #
     #
-    df_tabl.to_json(r'code_sheets\Base\base_output.json', orient='records', indent=4)
+    df_tabl.to_json(
+        runtime_path('code_sheets', 'Base', 'base_output.json'),
+        orient='records', indent=4,
+    )
     # === 2 строки × 2 столбца ===
     fig, axs = plt.subplots(2, 2, figsize=(14, 10))
     # --- График добычи ---
@@ -495,7 +548,10 @@ def main():
     axs[1, 1].xaxis.set_major_locator(ticker.MultipleLocator(12))
     plt.tight_layout()
     #plt.show()
-    save_figure(fig, 'code_sheets/Base/base_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(
+        fig, runtime_path('code_sheets', 'Base', 'base_graph.png'),
+        dpi=300, bbox_inches='tight',
+    )
     plt.close(fig)
     #
     # df_tabl['OIZ_gas_actual'] = oiz_gas - df_tabl['Qgas_all']

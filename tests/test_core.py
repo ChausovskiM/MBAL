@@ -1,4 +1,6 @@
 import math
+import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,8 +16,12 @@ from code_MBAL.Q_MOD.fQLd import fQLd
 from code_MBAL.Velosity_MOD.Velosity import Velosity
 from code_MBAL.Z_MOD.Z_calc import Z_calc
 from code_MBAL.Complementary_functions.save_figure import save_figure
+from code_MBAL.common.gas_mixture import load_gas_components
+from code_MBAL.common.paths import get_runtime_root, runtime_path
 from code_sheets.Base.base_controller import (
     _apply_well_schedule,
+    _build_forecast_table,
+    _calculate_base_wellhead_pressure,
     _ensure_contribution_columns,
     _ensure_numeric_columns,
     _validate_base_operation,
@@ -84,6 +90,43 @@ class ConversionAndInputTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _apply_well_schedule(frame, entry_wells=1)
 
+    def test_forecast_preserves_user_values_after_month_13(self):
+        frame = _build_forecast_table(
+            [
+                {'month': 1, 'exploration_coeff': 0.8, 'dP': 2.0},
+                {'month': 14, 'exploration_coeff': 0.7, 'dP': 1.9,
+                 'Qgas_frac': 3.5},
+            ],
+            horizon_months=15,
+            default_exploration_coeff=0.9,
+            default_dp_mpa=2.6,
+        )
+        self.assertEqual(frame.loc[13, 'month'], 14)
+        self.assertEqual(frame.loc[13, 'exploration_coeff'], 0.7)
+        self.assertEqual(frame.loc[13, 'dP'], 1.9)
+        self.assertEqual(frame.loc[13, 'Qgas_frac'], 3.5)
+        self.assertEqual(frame.loc[14, 'exploration_coeff'], 0.9)
+        self.assertEqual(frame.loc[14, 'dP'], 2.6)
+
+    def test_base_wellhead_pressure_uses_md_for_friction_and_tvd_for_head(self):
+        base_input = {
+            'd_nkt': 89, 'pipe_absolute_roughness': 5,
+            'well_md': 5000, 'well_tvd': 3187, 'T_ust': 29,
+            'viscosity_method': 'lee-gonzalez',
+            'hydraulic_resistance_method': 'стандартная зависимость',
+            'hydraulic_resistance_coefficient': 0,
+        }
+        with patch('code_sheets.Base.base_controller.Pust', return_value=8.5) as pust:
+            result = _calculate_base_wellhead_pressure(
+                14.0, 500.0, base_input,
+                {'Z_method': 'пенг-робинсон', 'density_method': 'корреляция'},
+                {'gas_relative_density': 0.7},
+                {'T_reservor_init': 60},
+            )
+        self.assertEqual(result, 8.5)
+        self.assertEqual(pust.call_args.args[5], 5000)
+        self.assertEqual(pust.call_args.args[-1], 3187)
+
     def test_stopped_well_does_not_restart_without_explicit_option(self):
         row = pd.Series({
             'Ppl_on_start_period': 12.0,
@@ -125,6 +168,34 @@ class ConversionAndInputTests(unittest.TestCase):
             OGR_calc('table data', 1.5, [1.0, 2.0], [10.0, 20.0]), 15.0
         )
 
+    def test_polynomial_kgf_uses_exact_curve_instead_of_rounded_table(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            kgf_dir = Path(temp_dir) / 'code_sheets' / 'KGF'
+            kgf_dir.mkdir(parents=True)
+            (kgf_dir / 'kgf_output.json').write_text(json.dumps({
+                'C5_plus': 9.0,
+                'coeff_experiment': [2.0, 1.0],
+                'coef_type': [3.0, 2.0],
+                'results_table': {
+                    'P': [1.0, 4.0],
+                    'KGF_experiment': [999.0, 999.0],
+                    'KGF_type': [999.0, 999.0],
+                },
+            }), encoding='utf-8')
+            (kgf_dir / 'kgf_experimental_input.json').write_text(
+                json.dumps({'Pnk': 4.0}), encoding='utf-8'
+            )
+            (kgf_dir / 'kgf_typical_input.json').write_text(
+                json.dumps({'Pnk': 4.0, 'KGF': 14.0}), encoding='utf-8'
+            )
+
+            with patch.dict(os.environ, {'MBAL_OUT_DIR': temp_dir}):
+                self.assertEqual(OGR_calc('experimental data', 3.0), 7.0)
+                self.assertEqual(OGR_calc('experimental data', 4.0), 9.0)
+                self.assertEqual(OGR_calc('experimental data', 4.001), 9.0)
+                self.assertEqual(OGR_calc('typical dependence', 3.0), 11.0)
+                self.assertEqual(OGR_calc('typical dependence', 4.001), 14.0)
+
     def test_table_z_requires_data(self):
         with self.assertRaises(ValueError):
             Z_calc('таблица', 1.5, 60.0)
@@ -134,6 +205,23 @@ class ConversionAndInputTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
+    def test_runtime_paths_follow_current_output_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            components_path = root / 'code_sheets' / 'PVT' / 'gas_components.json'
+            components_path.parent.mkdir(parents=True)
+            components_path.write_text(
+                json.dumps([{'formula': 'test', 'mol_fraction_pct': 100}]),
+                encoding='utf-8',
+            )
+            with patch.dict(os.environ, {'MBAL_OUT_DIR': str(root)}):
+                self.assertEqual(get_runtime_root(), root)
+                self.assertEqual(
+                    runtime_path('code_sheets', 'PVT', 'gas_components.json'),
+                    components_path,
+                )
+                self.assertEqual(load_gas_components()[0]['formula'], 'test')
+
     def test_summary_runs_after_base(self):
         self.assertGreater(
             runner.MODULES.index('code_sheets.Summary.summary_controller'),
@@ -157,8 +245,9 @@ class RunnerTests(unittest.TestCase):
             source_file.write_text('source', encoding='utf-8')
             output_file.write_text('user value', encoding='utf-8')
 
-            with patch.multiple(runner, FROZEN=True, BASE_READ=source, OUT_DIR=output):
-                runner.prepare_workdir()
+            with patch.dict(os.environ, {}, clear=False):
+                with patch.multiple(runner, FROZEN=True, BASE_READ=source, OUT_DIR=output):
+                    runner.prepare_workdir()
 
             self.assertEqual(output_file.read_text(encoding='utf-8'), 'user value')
 
@@ -230,7 +319,57 @@ class OutputTests(unittest.TestCase):
         monthly, annual = build_summary(pd.DataFrame([row]), 754.0)
         self.assertEqual(monthly.loc[0, 'available_wells'], 1)
         self.assertEqual(monthly.loc[0, 'active_wells'], 0)
+        self.assertEqual(monthly.loc[0, 'operating_mean_drawdown_mpa'], 0)
+        self.assertEqual(monthly.loc[0, 'operating_mean_wellhead_pressure_mpa'], 0)
+        self.assertEqual(monthly.loc[0, 'operating_mean_bottomhole_pressure_mpa'], 0)
         self.assertEqual(annual.loc[0, 'mean_gas_rate_km3_day'], 0)
+        self.assertEqual(annual.loc[0, 'operating_mean_drawdown_mpa'], 0)
+        self.assertEqual(annual.loc[0, 'operating_mean_wellhead_pressure_mpa'], 0)
+
+    def test_summary_annual_operating_pressures_exclude_stopped_months(self):
+        common = {
+            'len_report_period': 31,
+            'Qgas_base_fond': 1.0,
+            'Qcond_base_fond': 0.05,
+            'Qgas_all': 1.0,
+            'Qcond_all': 0.05,
+            'rab_fond_on_end_period': 1,
+            'leave_base_fond': 0,
+            'Ppl_on_start_period': 15.0,
+            'Ppl_on_end_period': 14.8,
+            'Pzab': 12.5,
+            'Qcum_gas_end_period': 1.0,
+            'Qcum_cond_end_period': 0.05,
+            'oiz_gas': 100.0,
+            'oiz_cond': 5.0,
+            'SPBT_t_t': 0.0,
+            'SPBT_m_m3': 0.0,
+        }
+        working = {
+            **common,
+            'date': '2024-01-01',
+            'dP': 2.5,
+            'Pust': 10.0,
+            'operation_status': 'работает',
+        }
+        stopped = {
+            **common,
+            'date': '2024-02-01',
+            'len_report_period': 29,
+            'Qgas_base_fond': 0.0,
+            'Qcond_base_fond': 0.0,
+            'Qgas_all': 0.0,
+            'Qcond_all': 0.0,
+            'dP': 2.6,
+            'Pust': 0.0,
+            'operation_status': 'остановлена',
+        }
+
+        _monthly, annual = build_summary(
+            pd.DataFrame([working, stopped]), 754.0
+        )
+        self.assertEqual(annual.loc[0, 'operating_mean_drawdown_mpa'], 2.5)
+        self.assertEqual(annual.loc[0, 'operating_mean_wellhead_pressure_mpa'], 10.0)
 
     def test_summary_keeps_excel_and_operating_pressure_metrics(self):
         row = {
@@ -250,6 +389,10 @@ class OutputTests(unittest.TestCase):
         self.assertEqual(monthly.loc[0, 'operating_mean_drawdown_mpa'], 2.4)
         self.assertEqual(monthly.loc[0, 'mean_wellhead_pressure_mpa'], 5.0)
         self.assertEqual(monthly.loc[0, 'operating_mean_wellhead_pressure_mpa'], 10.0)
+        self.assertAlmostEqual(monthly.loc[0, 'mean_bottomhole_pressure_mpa'], 15.75)
+        self.assertAlmostEqual(
+            monthly.loc[0, 'operating_mean_bottomhole_pressure_mpa'], 14.55
+        )
 
     def test_figure_is_saved_through_temporary_file(self):
         class FakeFigure:

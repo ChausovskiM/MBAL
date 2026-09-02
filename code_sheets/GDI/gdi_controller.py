@@ -19,14 +19,15 @@ from code_MBAL.Ld_MOD.Ld import Ld
 from code_MBAL.Pust_MOD.Pust import Pust
 from code_MBAL.Pust_MOD.Ld_MOD.Ld_calc import Ld_calc
 from code_MBAL.Complementary_functions.save_figure import save_figure
+from code_MBAL.common.paths import runtime_path
 
 
 
 def main():
     # открываем инпуты от листа PVT
-    with open(r"code_sheets\PVT\pvt_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PVT", "pvt_input.json").open('r', encoding='utf-8') as f:
         pvt_props = json.load(f)
-    with open(r"code_sheets\PZ\pz_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "PZ", "pz_input.json").open('r', encoding='utf-8') as f:
         pz_input = json.load(f)
     #
     Z_method = pz_input["Z_method"]
@@ -35,7 +36,7 @@ def main():
     T_C_plast = pvt_props["T_plast_C"]
     #
     # Открываем инпуты от текущего листа ГДИ
-    with open(r"code_sheets\GDI\gdi_input.json", 'r', encoding='utf-8') as f:
+    with runtime_path("code_sheets", "GDI", "gdi_input.json").open('r', encoding='utf-8') as f:
         gdi_input = json.load(f)
     #
     df_gdi_data = pd.DataFrame(gdi_input["gdi_data"]) #таблица ГДИ
@@ -72,7 +73,10 @@ def main():
                                                                                 gdi_input['pipe_absolute_roughness'], 
                                                                                 gdi_input['hydraulic_resistance_coefficient']),axis =1)
     #выгрузка результатов
-    df_gdi_data.to_json('code_sheets/GDI/gdi_output.json', orient='records', lines=True)
+    df_gdi_data.to_json(
+        runtime_path('code_sheets', 'GDI', 'gdi_output.json'),
+        orient='records', lines=True,
+    )
      # Создаем фигуру с двумя подграфиками
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(19, 6))
 
@@ -123,7 +127,10 @@ def main():
     ax3.grid(True)
 
     # Настройка общего заголовка и отступов
-    save_figure(fig, 'code_sheets/GDI/gdi_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(
+        fig, runtime_path('code_sheets', 'GDI', 'gdi_graph.png'),
+        dpi=300, bbox_inches='tight',
+    )
     plt.close(fig)
 if __name__ == "__main__":
     main()

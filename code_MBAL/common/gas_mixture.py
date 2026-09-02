@@ -7,15 +7,22 @@ from typing import Iterable
 
 import pandas as pd
 
-
-PVT_COMPONENTS_PATH = Path("code_sheets") / "PVT" / "gas_components.json"
-
+from code_MBAL.common.paths import runtime_path
 
 @lru_cache(maxsize=None)
-def load_gas_components(path: str | Path = PVT_COMPONENTS_PATH) -> list[dict]:
-    """Load gas components from JSON file."""
+def _load_gas_components(path: str, modified_ns: int) -> list[dict]:
+    del modified_ns  # входит в ключ кеша и обновляет данные после изменения файла
     with Path(path).open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_gas_components(path: str | Path | None = None) -> list[dict]:
+    """Load gas components from the active run directory or an explicit path."""
+    source = Path(path) if path is not None else runtime_path(
+        "code_sheets", "PVT", "gas_components.json"
+    )
+    source = source.resolve()
+    return _load_gas_components(str(source), source.stat().st_mtime_ns)
 
 
 def calc_mixture_params(gas_components: Iterable[dict]) -> tuple[float, float, float]:

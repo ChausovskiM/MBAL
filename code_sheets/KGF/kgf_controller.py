@@ -19,6 +19,7 @@ sys.path.append(project_root)
 from code_MBAL.Complementary_functions.OGR import OGR
 from code_MBAL.Complementary_functions.OGR_type import OGR_TYPE
 from code_MBAL.Complementary_functions.KIK import KIK
+from code_MBAL.common.paths import runtime_path
 #
 # Загрузка данных
 #
@@ -35,7 +36,7 @@ def model_type(P, A, B, C, D, E, F, G):
 def main():
     # ==== Зависимость по экспериментальным данным =====
     # Загрузка данных
-    with open(r"code_sheets\KGF\kgf_experimental_input.json", encoding="utf-8") as f:
+    with runtime_path("code_sheets", "KGF", "kgf_experimental_input.json").open(encoding="utf-8") as f:
         data = json.load(f)
     # Извлекаем отдельные переменные
     P_pl = data["Ppl"]
@@ -58,7 +59,7 @@ def main():
     #
     #
     # ==== Типовая зависимость ===== 
-    with open(r"code_sheets\KGF\kgf_typical_input.json", encoding="utf-8") as f:
+    with runtime_path("code_sheets", "KGF", "kgf_typical_input.json").open(encoding="utf-8") as f:
         data = json.load(f)
     # ==============================
     kgf_type = data['KGF']
@@ -86,7 +87,7 @@ def main():
         "results_table": df_svod.round(5).to_dict(orient="list") 
     }
     #
-    with open('code_sheets/KGF/kgf_output.json', 'w', encoding='utf-8') as f:
+    with runtime_path('code_sheets', 'KGF', 'kgf_output.json').open('w', encoding='utf-8') as f:
         json.dump(summary, f, ensure_ascii=False, indent=4)
     #
     # Создаем фигуру с 3 подграфиками (1 строка, 3 столбца)
@@ -117,7 +118,7 @@ def main():
     ax3.legend()
     ax3.grid()
 
-    save_figure(fig, 'code_sheets/KGF/kgf_graph.png', dpi=300)
+    save_figure(fig, runtime_path('code_sheets', 'KGF', 'kgf_graph.png'), dpi=300)
     plt.close(fig)
 
 

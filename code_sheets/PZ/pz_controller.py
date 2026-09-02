@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from datetime import datetime
 
 import pandas as pd
@@ -9,13 +8,12 @@ from code_MBAL.Complementary_functions.save_figure import save_figure
 from code_MBAL.Z_MOD.Z_calc import Z_calc
 from code_MBAL.MBAL_fP_MOD.MBAL_fP import MBAL_fP
 from code_MBAL.MBAL_fP_MOD.MBAL_Hurst import Mbal_Hurst
-
-BASE_DIR = Path(__file__).resolve().parents[2]
+from code_MBAL.common.paths import runtime_path
 #from code_MBAL.MBAL_fP_MOD.MBAL_fP import Z_calc
 
 def main():
 # загрузка исходных данных
-    with (BASE_DIR / "code_sheets" / "PZ" / "pz_input.json").open("r", encoding="utf-8") as f:
+    with runtime_path("code_sheets", "PZ", "pz_input.json").open("r", encoding="utf-8") as f:
         pz_input = json.load(f)
 
     oiz_gas = pz_input['nbz_gas'] - pz_input['Cum_gas_under_pred']
@@ -85,8 +83,8 @@ def main():
         "results_table": df_dev.to_dict(orient="list") 
     }
 
-    legacy_output = BASE_DIR / "code_sheets" / "PZ" / "pz_outputs.json"
-    output_path = BASE_DIR / "code_sheets" / "PZ" / "pz_output.json"
+    legacy_output = runtime_path("code_sheets", "PZ", "pz_outputs.json")
+    output_path = runtime_path("code_sheets", "PZ", "pz_output.json")
     for path in (legacy_output, output_path):
         with path.open("w", encoding="utf-8") as f:
             json.dump(summary, f, ensure_ascii=False, indent=4)
@@ -117,7 +115,10 @@ def main():
 
     # Отображение графиков
     #plt.show()
-    save_figure(fig, 'code_sheets/PZ/pz_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(
+        fig, runtime_path('code_sheets', 'PZ', 'pz_graph.png'),
+        dpi=300, bbox_inches='tight',
+    )
     plt.close(fig)
 
 if __name__ == "__main__":

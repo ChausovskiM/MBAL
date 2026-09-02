@@ -18,6 +18,7 @@ sys.path.append(project_root)
 #
 from code_MBAL.Complementary_functions.Composition_MOD.Composition import Composition
 from code_MBAL.Complementary_functions.save_figure import save_figure
+from code_MBAL.common.paths import runtime_path
 
 # Функция-обертка для применения к строкам
 
@@ -25,23 +26,23 @@ from code_MBAL.Complementary_functions.save_figure import save_figure
 def main():
     # ==== Зависимость по экспериментальным данным =====
     # Загрузка данных
-    with open(r"code_sheets\PVT\gas_components.json", encoding="utf-8") as f:
+    with runtime_path("code_sheets", "PVT", "gas_components.json").open(encoding="utf-8") as f:
         gas_components = pd.DataFrame(json.load(f))
 
-    with open(r"code_sheets\Components\composition_input.json", encoding="utf-8") as f:
+    with runtime_path("code_sheets", "Components", "composition_input.json").open(encoding="utf-8") as f:
         data = json.load(f)
     ogr_method = data["method"]
     #
     #print(gas_components)
     # Определяем путь к файлу в зависимости от метода
     if ogr_method == 'experimental data':
-        kgf_file = r"code_sheets\KGF\kgf_experimental_input.json"
+        kgf_file = runtime_path("code_sheets", "KGF", "kgf_experimental_input.json")
     elif ogr_method == 'typical dependence':
-        kgf_file = r"code_sheets\KGF\kgf_typical_input.json"
+        kgf_file = runtime_path("code_sheets", "KGF", "kgf_typical_input.json")
     else:
         raise ValueError(f"Unknown method OGR: {ogr_method}")
     # открываем нужный файл
-    with open(kgf_file, encoding="utf-8") as f:
+    with kgf_file.open(encoding="utf-8") as f:
             data = json.load(f)
     P_nk = data['Pnk']
 
@@ -67,7 +68,10 @@ def main():
         )
     
     # Сохранение результатов
-    df_components.to_json('code_sheets/Components/components_output.json', orient='records', lines=True)
+    df_components.to_json(
+        runtime_path('code_sheets', 'Components', 'components_output.json'),
+        orient='records', lines=True,
+    )
     # Создаем фигуру и оси для графиков
     fig, axs = plt.subplots(4, 3, figsize=(18, 12))
 
@@ -81,7 +85,10 @@ def main():
         axs[row, col].legend()
         axs[row, col].grid(True)
 
-    save_figure(fig, 'code_sheets/Components/components_graph.png', dpi=300, bbox_inches='tight')
+    save_figure(
+        fig, runtime_path('code_sheets', 'Components', 'components_graph.png'),
+        dpi=300, bbox_inches='tight',
+    )
     plt.close(fig)
 
 
