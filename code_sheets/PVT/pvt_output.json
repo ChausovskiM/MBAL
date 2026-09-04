@@ -2,6 +2,7 @@
   "Ppr": 4.2068,
   "Tpr": 1.6566,
   "gas_relative_density": 0.6186,
+  "gas_relative_density_exact": 0.618627722001954,
   "Z_calc": 0.8495,
   "Z_deviation": -6.03,
   "rho": 159.968,

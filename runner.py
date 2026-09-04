@@ -86,7 +86,6 @@ def prepare_workdir():
 
 def run_controllers():
     old_cwd = Path.cwd()
-    failures = []
     try:
         os.chdir(OUT_DIR)  # все относительные записи пойдут в run_data
         for name in MODULES:
@@ -99,13 +98,9 @@ def run_controllers():
                     print(f"[skip] {name} не содержит main()")
             except Exception as e:
                 print(f"[ERR] {name}: {e}")
-                failures.append((name, e))
+                raise RuntimeError(f"Ошибка модуля {name}: {e}") from e
     finally:
         os.chdir(old_cwd)
-
-    if failures:
-        details = "; ".join(f"{name}: {error}" for name, error in failures)
-        raise RuntimeError(f"Ошибки в {len(failures)} модуле(ях): {details}")
 
 def show_graphs():
     if plt.get_backend().lower() == "agg":

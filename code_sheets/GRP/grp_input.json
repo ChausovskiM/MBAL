@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "intervention_type": "grp",
+  "mode": "external",
+  "enabled": true,
+  "include_in_balance": true,
+  "include_cohort_details": false,
+  "inflow_model": "inherit",
+  "kgf_method": "gas field",
+  "negative_uplift_policy": "error",
+  "period_controls": {
+    "default_drawdown_mpa": 2.6,
+    "default_utilization": 0.9,
+    "overrides": []
+  },
+  "events": []
+}

@@ -1,4 +1,10 @@
 import json
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -73,6 +79,7 @@ def main():
         "Ppr": round(Ppr, 4),
         "Tpr": round(Tpr, 4),
         "gas_relative_density": round(m, 4),
+        "gas_relative_density_exact": m,
         "Z_calc": round(Z_calculate, 5),
         "Z_deviation": round(deviation_Z, 2),
         "rho": round(rho, 3),

@@ -1,6 +1,13 @@
 """Помесячный и годовой сводный отчёт по результатам листа «База»."""
 
 import json
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -80,10 +87,19 @@ def build_summary(base_frame, condensate_density_kgm3):
         ).astype(float)
     else:
         base_operating = source["rab_fond_on_end_period"].gt(0).astype(float)
-    periodic_operating = periodic_active.gt(0).astype(float)
+    if "periodic_operation_status" in source:
+        periodic_operating = (
+            source["periodic_operation_status"].eq("работает")
+            & periodic_active.gt(0)
+        ).astype(float)
+    else:
+        periodic_operating = periodic_active.gt(0).astype(float)
     operating_group_count = base_operating + periodic_operating
     available_wells = source["rab_fond_on_end_period"] + periodic_active
-    active_wells = source["rab_fond_on_end_period"] * base_operating + periodic_active
+    active_wells = (
+        source["rab_fond_on_end_period"] * base_operating
+        + periodic_active * periodic_operating
+    )
     if "mean_rab_basefond" in source:
         base_operating_well_days = (
             _optional_numeric(source, "mean_rab_basefond")
@@ -97,7 +113,7 @@ def build_summary(base_frame, condensate_density_kgm3):
     if "periodic_active_well_days" in source:
         periodic_operating_well_days = _optional_numeric(
             source, "periodic_active_well_days"
-        )
+        ) * periodic_operating
     else:
         periodic_operating_well_days = periodic_active * source["len_report_period"]
     mean_reservoir_pressure = (

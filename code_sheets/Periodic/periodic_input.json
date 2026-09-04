@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "mode": "external",
+  "enabled": true,
+  "initial_active_wells": 0.0,
+  "inflow_model": "inherit",
+  "kgf_method": "inherit",
+  "strict_excel_compatibility": false,
+  "defaults": {
+    "drawdown_mpa": 0.0,
+    "utilization": 0.0,
+    "wells_retired": 0.0,
+    "wells_transferred_from_base": 0.0,
+    "a_standard": 0.0,
+    "b_standard": 0.0,
+    "a_pseudo": 0.0,
+    "b_pseudo": 0.0
+  },
+  "schedule": []
+}

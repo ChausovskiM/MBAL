@@ -1,6 +1,8 @@
 import math
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,11 +26,44 @@ from code_sheets.Base.base_controller import (
     _calculate_base_wellhead_pressure,
     _ensure_contribution_columns,
     _ensure_numeric_columns,
+    _gas_relative_density,
+    _publish_json_outputs,
     _validate_base_operation,
     condensate_tonnes_to_m3,
 )
 from code_sheets.Productivity.prod_controller import effective_length
 from code_sheets.Summary.summary_controller import build_summary
+
+
+class ControllerBootstrapTests(unittest.TestCase):
+    def test_documented_controllers_import_when_started_outside_project(self):
+        project_root = Path(__file__).resolve().parents[1]
+        controllers = (
+            project_root / "code_sheets" / "PVT" / "pvt_controller.py",
+            project_root / "code_sheets" / "PZ" / "pz_controller.py",
+            project_root / "code_sheets" / "Summary" / "summary_controller.py",
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for controller in controllers:
+                with self.subTest(controller=controller.name):
+                    command = (
+                        "import runpy; "
+                        f"runpy.run_path({str(controller)!r}, "
+                        "run_name='controller_import_check')"
+                    )
+                    completed = subprocess.run(
+                        [sys.executable, "-c", command],
+                        cwd=temp_dir,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(
+                        completed.returncode,
+                        0,
+                        msg=completed.stdout + completed.stderr,
+                    )
 
 
 class FlowTests(unittest.TestCase):
@@ -126,6 +161,19 @@ class ConversionAndInputTests(unittest.TestCase):
         self.assertEqual(result, 8.5)
         self.assertEqual(pust.call_args.args[5], 5000)
         self.assertEqual(pust.call_args.args[-1], 3187)
+
+    def test_downstream_physics_prefers_unrounded_relative_density(self):
+        self.assertEqual(
+            _gas_relative_density({
+                'gas_relative_density': 0.6186,
+                'gas_relative_density_exact': 0.618627722,
+            }),
+            0.618627722,
+        )
+        self.assertEqual(
+            _gas_relative_density({'gas_relative_density': 0.6186}),
+            0.6186,
+        )
 
     def test_stopped_well_does_not_restart_without_explicit_option(self):
         row = pd.Series({
@@ -233,6 +281,31 @@ class RunnerTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 runner.run_controllers()
 
+    def test_controller_error_stops_downstream_modules(self):
+        calls = []
+
+        class FailingController:
+            @staticmethod
+            def main():
+                calls.append('failing')
+                raise ValueError('boom')
+
+        class DownstreamController:
+            @staticmethod
+            def main():
+                calls.append('downstream')
+
+        controllers = {
+            'failing': FailingController,
+            'downstream': DownstreamController,
+        }
+        with patch.object(runner, 'MODULES', list(controllers)), patch.object(
+            runner, 'CONTROLLERS', controllers
+        ):
+            with self.assertRaisesRegex(RuntimeError, 'failing'):
+                runner.run_controllers()
+        self.assertEqual(calls, ['failing'])
+
     def test_frozen_startup_preserves_user_data(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -253,6 +326,54 @@ class RunnerTests(unittest.TestCase):
 
 
 class OutputTests(unittest.TestCase):
+    def test_json_outputs_are_not_published_until_all_are_staged(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first = Path(temp_dir) / 'first.json'
+            second = Path(temp_dir) / 'second.json'
+            first.write_text('old first', encoding='utf-8')
+            second.write_text('old second', encoding='utf-8')
+
+            with self.assertRaises(TypeError):
+                _publish_json_outputs([
+                    (first, 'new first'),
+                    (second, object()),
+                ])
+
+            self.assertEqual(first.read_text(encoding='utf-8'), 'old first')
+            self.assertEqual(second.read_text(encoding='utf-8'), 'old second')
+            self.assertEqual(list(Path(temp_dir).glob('*.tmp')), [])
+
+    def test_json_output_batch_rolls_back_when_replace_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first = Path(temp_dir) / 'first.json'
+            second = Path(temp_dir) / 'second.json'
+            first.write_text('old first', encoding='utf-8')
+            second.write_text('old second', encoding='utf-8')
+            real_replace = os.replace
+            calls = 0
+
+            def flaky_replace(source, target):
+                nonlocal calls
+                calls += 1
+                if calls == 4:
+                    raise PermissionError('locked output')
+                return real_replace(source, target)
+
+            with patch(
+                'code_sheets.Base.base_controller.os.replace',
+                side_effect=flaky_replace,
+            ):
+                with self.assertRaises(PermissionError):
+                    _publish_json_outputs([
+                        (first, 'new first'),
+                        (second, 'new second'),
+                    ])
+
+            self.assertEqual(first.read_text(encoding='utf-8'), 'old first')
+            self.assertEqual(second.read_text(encoding='utf-8'), 'old second')
+            self.assertEqual(list(Path(temp_dir).glob('*.tmp')), [])
+            self.assertEqual(list(Path(temp_dir).glob('*.bak')), [])
+
     def test_summary_aggregates_excel_report_metrics(self):
         rows = []
         for date_value, days, gas, condensate, pressure in [
@@ -392,6 +513,33 @@ class OutputTests(unittest.TestCase):
         self.assertAlmostEqual(monthly.loc[0, 'mean_bottomhole_pressure_mpa'], 15.75)
         self.assertAlmostEqual(
             monthly.loc[0, 'operating_mean_bottomhole_pressure_mpa'], 14.55
+        )
+
+    def test_summary_excludes_nonoperating_periodic_fund(self):
+        row = {
+            'date': '2024-01-01', 'len_report_period': 31,
+            'Qgas_base_fond': 0.0, 'Qcond_base_fond': 0.0,
+            'Qgas_all': 0.0, 'Qcond_all': 0.0,
+            'rab_fond_on_end_period': 0, 'leave_base_fond': 0,
+            'dP': 2.4, 'Pust': 0.0,
+            'Ppl_on_start_period': 17.0, 'Ppl_on_end_period': 17.0,
+            'Pzab': 17.0, 'Qcum_gas_end_period': 900.0,
+            'Qcum_cond_end_period': 10.0, 'oiz_gas': 3000.0,
+            'oiz_cond': 300.0, 'SPBT_t_t': 0.0, 'SPBT_m_m3': 0.0,
+            'operation_status': 'остановлена',
+            'periodic_active_wells': 2.0,
+            'periodic_active_well_days': 62.0,
+            'periodic_operation_status': 'остановлена',
+            'periodic_dP': 2.0,
+            'periodic_Pust': 8.0,
+        }
+        monthly, _annual = build_summary(pd.DataFrame([row]), 754.0)
+        self.assertEqual(monthly.loc[0, 'available_wells'], 2.0)
+        self.assertEqual(monthly.loc[0, 'active_wells'], 0.0)
+        self.assertEqual(monthly.loc[0, 'active_well_days'], 0.0)
+        self.assertEqual(monthly.loc[0, 'operating_mean_drawdown_mpa'], 0.0)
+        self.assertEqual(
+            monthly.loc[0, 'operating_mean_wellhead_pressure_mpa'], 0.0
         )
 
     def test_figure_is_saved_through_temporary_file(self):
